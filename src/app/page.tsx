@@ -61,6 +61,8 @@ export default function ChatPage() {
             const data = await response.json();
             if (data.content) {
                 setMessages(prev => [...prev, { role: 'assistant', content: data.content, type: 'text' }]);
+            } else {
+                setMessages(prev => [...prev, { role: 'assistant', content: 'Ay caramba, se me enredó el pedido. ¿Me repites?', type: 'text' }]);
             }
         } catch (error) {
             console.error('Chat error:', error);
