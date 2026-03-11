@@ -4,7 +4,7 @@
   "main": "index.js",
   "scripts": {
     "dev": "next dev",
-    "build": "prisma generate && prisma migrate deploy && next build",
+    "build": "prisma generate && prisma db push && next build",
     "postinstall": "prisma generate",
     "start": "next start -p ${PORT:-3000}",
     "lint": "next lint"
