@@ -1,0 +1,73 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model StoreConfig {
+  id                 Int     @id @default(autoincrement())
+  horaCorte          String  @default("14:00")
+  emailAdmin         String  @default("ventas@elverdulero.com.co")
+  emailsCopia        String  @default("")
+  diasFestivos       String  @default("[]")
+  mensajeBienvenida  String  @default("¡Qué tal, marchante! Bienvenido a la plaza digital. Soy El Verdulero, ¿qué le vamos a poner a la canasta hoy?")
+  personalidad       String  @default("Eres El Verdulero, un asistente carismático...")
+  wcUrl              String?
+  wcConsumerKey      String?
+  wcConsumerSecret   String?
+  geminiApiKey       String?
+  intervencionManual Boolean @default(false)
+}
+
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String?   @unique
+  password      String
+  emailVerified DateTime?
+  image         String?
+}
+
+model ChatSession {
+  id           String    @id @default(cuid())
+  customerName String?
+  phoneNumber  String?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  isActive     Boolean   @default(true)
+  messages     Message[]
+}
+
+model Message {
+  id        String      @id @default(cuid())
+  sessionId String
+  role      String
+  content   String
+  createdAt DateTime    @default(now())
+  session   ChatSession @relation(fields: [sessionId], references: [id])
+}
+
+model Order {
+  id              Int      @id @default(autoincrement())
+  createdAt       DateTime @default(now())
+  customerName    String
+  customerPhone   String
+  customerAddress String
+  customerCity    String
+  items           String
+  total           Float
+  status          String   @default("Pendiente")
+  pdfUrl          String?
+}
+
+model Customer {
+  phone       String   @id
+  name        String
+  lastAddress String?
+  lastCity    String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
