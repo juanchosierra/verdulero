@@ -2119,12 +2119,12 @@ export default function ChatPage() {
                             </div>
                             <div className="mt-3 border-t border-gray-100 pt-3 text-center">
                                 <a
-                                    href="https://miwibi.com.co"
+                                    href="https://cuantium.com"
                                     target="_blank"
                                     rel="noopener noreferrer"
                                     className="text-[11px] font-semibold text-gray-400 transition hover:text-emerald-700"
                                 >
-                                    Desarrollado por Cuantium MiWibi AI
+                                    Desarrollado por Cuantium - Wibi™
                                 </a>
                             </div>
                         </div>
