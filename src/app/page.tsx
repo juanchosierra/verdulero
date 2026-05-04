@@ -1294,8 +1294,8 @@ export default function ChatPage() {
     );
 
     return (
-        <main className="min-h-screen bg-[radial-gradient(circle_at_top,_rgba(34,197,94,0.08),_transparent_28%),linear-gradient(180deg,_#f8faf8_0%,_#f4f6f3_100%)]">
-            <div className="sticky top-0 z-[100] border-b border-[#e6eadf] bg-white/95 backdrop-blur-xl shadow-[0_10px_40px_rgba(15,23,42,0.04)]">
+        <main className="app-safe-screen bg-[radial-gradient(circle_at_top,_rgba(34,197,94,0.08),_transparent_28%),linear-gradient(180deg,_#f8faf8_0%,_#f4f6f3_100%)]">
+            <div className="app-safe-top sticky top-0 z-[100] border-b border-[#e6eadf] bg-white/95 backdrop-blur-xl shadow-[0_10px_40px_rgba(15,23,42,0.04)]">
                 <div className="mx-auto max-w-[1720px] px-3 md:px-5">
                     <div className="flex flex-wrap items-center gap-2 py-3 lg:flex-nowrap lg:gap-3">
                         <div className="hidden min-w-0 lg:flex lg:items-center lg:gap-3">
@@ -1358,7 +1358,7 @@ export default function ChatPage() {
                         initial={{ opacity: 0 }}
                         animate={{ opacity: 1 }}
                         exit={{ opacity: 0 }}
-                        className="fixed inset-0 z-[112] bg-slate-950/45 px-3 py-4"
+                        className="app-safe-modal fixed inset-0 z-[112] bg-slate-950/45"
                     >
                         <motion.div
                             initial={{ opacity: 0, y: 24, scale: 0.98 }}
@@ -1366,7 +1366,7 @@ export default function ChatPage() {
                             exit={{ opacity: 0, y: 24, scale: 0.98 }}
                             className="mx-auto flex h-full max-w-xl items-center justify-center"
                         >
-                            <div className="w-full rounded-[2rem] border border-white/60 bg-white p-6 shadow-2xl md:p-8">
+                            <div className="app-safe-panel w-full overflow-y-auto rounded-[2rem] border border-white/60 bg-white p-6 shadow-2xl md:p-8">
                                 <p className="text-[11px] font-black uppercase tracking-[0.22em] text-green-700">Seguimos donde ibas</p>
                                 <h2 className="mt-3 text-3xl font-black tracking-tight text-slate-900">
                                     Encontré tu chat y tu canasta guardados.
@@ -1387,7 +1387,7 @@ export default function ChatPage() {
                                     </p>
                                 </div>
 
-                                <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:justify-end">
+                                <div className="app-modal-actions mt-6 flex flex-col gap-3 sm:flex-row sm:justify-end">
                                     <button
                                         type="button"
                                         onClick={startFreshSession}
@@ -1415,7 +1415,7 @@ export default function ChatPage() {
                         initial={{ opacity: 0 }}
                         animate={{ opacity: 1 }}
                         exit={{ opacity: 0 }}
-                        className="fixed inset-0 z-[115] bg-slate-950/50 px-3 py-4"
+                        className="app-safe-modal fixed inset-0 z-[115] bg-slate-950/50"
                     >
                         <motion.div
                             initial={{ opacity: 0, y: 24, scale: 0.98 }}
@@ -1423,7 +1423,7 @@ export default function ChatPage() {
                             exit={{ opacity: 0, y: 24, scale: 0.98 }}
                             className="mx-auto flex h-full max-w-xl items-center justify-center"
                         >
-                            <div className="w-full rounded-[2rem] border border-white/60 bg-white p-6 shadow-2xl md:p-7">
+                            <div className="app-safe-panel w-full overflow-y-auto rounded-[2rem] border border-white/60 bg-white p-6 shadow-2xl md:p-7">
                                 <div className="flex items-start justify-between gap-4">
                                     <div>
                                         <p className="text-[11px] font-black uppercase tracking-[0.22em] text-rose-700">Modo inspección</p>
@@ -1462,7 +1462,7 @@ export default function ChatPage() {
                                     />
                                 </label>
 
-                                <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-end">
+                                <div className="app-modal-actions mt-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-end">
                                     <button
                                         type="button"
                                         onClick={() => setPendingErrorReport(null)}
@@ -1491,7 +1491,7 @@ export default function ChatPage() {
                         initial={{ opacity: 0 }}
                         animate={{ opacity: 1 }}
                         exit={{ opacity: 0 }}
-                        className="fixed inset-0 z-[111] bg-slate-950/50 px-3 py-4"
+                        className="app-safe-modal fixed inset-0 z-[111] bg-slate-950/50"
                     >
                         <motion.div
                             initial={{ opacity: 0, y: 24, scale: 0.98 }}
@@ -1499,7 +1499,7 @@ export default function ChatPage() {
                             exit={{ opacity: 0, y: 24, scale: 0.98 }}
                             className="mx-auto flex h-full max-w-2xl items-center justify-center"
                         >
-                            <div className="w-full rounded-[2rem] border border-white/60 bg-white p-6 shadow-2xl md:p-8">
+                            <div className="app-safe-panel w-full overflow-y-auto rounded-[2rem] border border-white/60 bg-white p-6 shadow-2xl md:p-8">
                                 <div className="flex items-start justify-between gap-4">
                                     <div className="max-w-xl">
                                         <p className="text-[11px] font-black uppercase tracking-[0.22em] text-green-700">Cierre del pedido</p>
@@ -1561,7 +1561,7 @@ export default function ChatPage() {
                                     </div>
                                 )}
 
-                                <div className="mt-6 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                                <div className="app-modal-actions mt-6 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
                                     <p className="text-xs font-semibold text-slate-400">
                                         Vamos a usar estos datos solo para despacho y contacto del pedido.
                                     </p>
@@ -1586,7 +1586,7 @@ export default function ChatPage() {
                         initial={{ opacity: 0 }}
                         animate={{ opacity: 1 }}
                         exit={{ opacity: 0 }}
-                        className="fixed inset-0 z-[110] bg-slate-950/45 px-3 py-4"
+                        className="app-safe-modal fixed inset-0 z-[110] bg-slate-950/45"
                     >
                         <motion.div
                             initial={{ opacity: 0, y: 24, scale: 0.98 }}
@@ -1594,7 +1594,7 @@ export default function ChatPage() {
                             exit={{ opacity: 0, y: 24, scale: 0.98 }}
                             className="mx-auto flex h-full max-w-2xl items-center justify-center"
                         >
-                            <div className="w-full rounded-[2rem] border border-white/60 bg-white p-6 shadow-2xl md:p-8">
+                            <div className="app-safe-panel w-full overflow-y-auto rounded-[2rem] border border-white/60 bg-white p-6 shadow-2xl md:p-8">
                                 <div className="max-w-xl">
                                     <p className="text-[11px] font-black uppercase tracking-[0.22em] text-green-700">Antes de empezar</p>
                                     <h2 className="mt-3 text-3xl font-black tracking-tight text-slate-900">
@@ -1675,7 +1675,7 @@ export default function ChatPage() {
                                     </div>
                                 )}
 
-                                <div className="mt-6 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                                <div className="app-modal-actions mt-6 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
                                     <p className="text-xs font-semibold text-slate-400">
                                         {publicConfig.cobertura || "Solo entregamos en Bucaramanga, Floridablanca, Girón, Piedecuesta y Ruitoque."}
                                     </p>
@@ -1709,7 +1709,7 @@ export default function ChatPage() {
                         initial={{ opacity: 0 }}
                         animate={{ opacity: 1 }}
                         exit={{ opacity: 0 }}
-                        className="fixed inset-0 z-[90] bg-slate-950/35 px-3 py-4 xl:hidden"
+                        className="app-safe-modal fixed inset-0 z-[90] bg-slate-950/35 xl:hidden"
                     >
                         <motion.div
                             initial={{ opacity: 0, y: 24 }}
@@ -1729,7 +1729,7 @@ export default function ChatPage() {
                         initial={{ opacity: 0 }}
                         animate={{ opacity: 1 }}
                         exit={{ opacity: 0 }}
-                        className="fixed inset-0 z-[111] bg-slate-950/45 px-3 py-4"
+                        className="app-safe-modal fixed inset-0 z-[111] bg-slate-950/45"
                     >
                         <motion.div
                             initial={{ opacity: 0, y: 24, scale: 0.98 }}
@@ -1737,7 +1737,7 @@ export default function ChatPage() {
                             exit={{ opacity: 0, y: 24, scale: 0.98 }}
                             className="mx-auto flex h-full max-w-2xl items-center justify-center"
                         >
-                            <div className="w-full max-h-[90vh] overflow-hidden rounded-[2rem] border border-white/60 bg-white p-6 shadow-2xl md:p-8">
+                            <div className="app-safe-panel w-full overflow-y-auto rounded-[2rem] border border-white/60 bg-white p-6 shadow-2xl md:p-8">
                                 <div className="flex items-start justify-between gap-4">
                                     <div className="max-w-xl">
                                         <p className="text-[11px] font-black uppercase tracking-[0.22em] text-green-700">Seguimiento</p>
@@ -1768,7 +1768,7 @@ export default function ChatPage() {
                                         />
                                     </label>
 
-                                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                                    <div className="app-modal-actions flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                                         <p className="text-xs font-semibold text-slate-400">
                                             Solo con tu correo te mostramos el estado de tus últimos pedidos.
                                         </p>
@@ -1851,7 +1851,7 @@ export default function ChatPage() {
                         initial={{ opacity: 0 }}
                         animate={{ opacity: 1 }}
                         exit={{ opacity: 0 }}
-                        className="fixed inset-0 z-[95] bg-slate-950/35 px-3 py-4 lg:hidden"
+                        className="app-safe-modal fixed inset-0 z-[95] bg-slate-950/35 lg:hidden"
                     >
                         <motion.div
                             initial={{ opacity: 0, y: 24 }}
@@ -1866,7 +1866,7 @@ export default function ChatPage() {
             </AnimatePresence>
 
             <div className="mx-auto max-w-[1720px] px-3 py-4 md:px-5">
-                <div className="flex h-[calc(100vh-168px)] gap-4 md:h-[calc(100vh-178px)]">
+                <div className="app-chat-height flex gap-4">
                 <aside className="hidden xl:flex w-[330px] bg-white border border-gray-100 shadow-premium rounded-3xl overflow-hidden">
                     {renderCatalogPanel(false)}
                 </aside>
@@ -1874,8 +1874,8 @@ export default function ChatPage() {
                 <section className="flex-1 min-w-0 flex flex-col bg-white border border-gray-100 shadow-premium rounded-3xl overflow-hidden font-sans relative">
                     <div className="absolute top-0 left-0 w-full h-40 bg-gradient-to-b from-primary/5 to-transparent pointer-events-none -z-10" />
 
-                    <header className="px-6 py-4 flex items-start justify-between border-b border-gray-100 bg-white/90 backdrop-blur-xl sticky top-0 z-50">
-                        <div className="flex items-start gap-4 group min-w-0">
+                    <header className="sticky top-0 z-50 flex flex-col gap-3 border-b border-gray-100 bg-white/90 px-4 py-3 backdrop-blur-xl sm:flex-row sm:items-start sm:justify-between sm:px-6 sm:py-4">
+                        <div className="group flex w-full min-w-0 items-start gap-3 sm:w-auto sm:gap-4">
                             <div className="relative">
                                 <div className="w-12 h-12 relative bg-white rounded-2xl border border-gray-100 shadow-premium flex items-center justify-center overflow-hidden">
                                     <Image
@@ -1908,18 +1908,18 @@ export default function ChatPage() {
                                 </div>
                             </div>
                         </div>
-                        <div className="flex items-center gap-2">
+                        <div className="flex w-full shrink-0 items-center justify-between gap-2 sm:w-auto sm:justify-end">
                             <button
                                 type="button"
                                 onClick={() => setCatalogOpen(true)}
-                                className="xl:hidden rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-[11px] font-black uppercase tracking-wide text-gray-700 transition hover:bg-gray-100"
+                                className="flex-1 rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-[11px] font-black uppercase tracking-wide text-gray-700 transition hover:bg-gray-100 sm:flex-none xl:hidden"
                             >
                                 Catálogo
                             </button>
                             <button
                                 type="button"
                                 onClick={() => setMobileCartOpen(true)}
-                                className="lg:hidden rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-[11px] font-black uppercase tracking-wide text-gray-700 transition hover:bg-gray-100"
+                                className="flex-1 rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-[11px] font-black uppercase tracking-wide text-gray-700 transition hover:bg-gray-100 sm:flex-none lg:hidden"
                             >
                                 Canasta
                             </button>
@@ -2015,7 +2015,7 @@ export default function ChatPage() {
                         <div ref={messagesEndRef} />
                     </div>
 
-                    <div className="px-6 pb-8 pt-4 bg-white/90 backdrop-blur-xl border-t border-gray-50 sticky bottom-0 z-50">
+                    <div className="app-chat-composer sticky bottom-0 z-50 border-t border-gray-50 bg-white/90 px-4 pt-3 backdrop-blur-xl sm:px-6 sm:pt-4">
                         {cartItems.length > 0 && (
                             <div className="mb-4 flex items-center justify-between gap-3 rounded-2xl border border-green-100 bg-green-50 px-4 py-3 lg:hidden">
                                 <div>
