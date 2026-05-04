@@ -1,16 +1,24 @@
 "use client";
 
-import { useState } from "react";
-import { signIn } from "next-auth/react";
+import { useState, useEffect } from "react";
+import { signIn, useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
-import { Lock, Mail, Loader2, ShieldCheck, ChevronRight, Globe, Sparkles } from "lucide-react";
-import Image from "next/image";
+import { Lock, Mail, Loader2, ShieldCheck, ChevronRight, Globe, Sparkles, Eye, EyeOff } from "lucide-react";
 
 export default function LoginPage() {
     const [email, setEmail] = useState("");
     const [password, setPassword] = useState("");
+    const [showPassword, setShowPassword] = useState(false);
     const [loading, setLoading] = useState(false);
     const router = useRouter();
+    const { status } = useSession();
+
+    // Si ya está autenticado, redirigir al panel
+    useEffect(() => {
+        if (status === "authenticated") {
+            router.push("/admin");
+        }
+    }, [status, router]);
 
     const handleLogin = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -27,6 +35,15 @@ export default function LoginPage() {
             setLoading(false);
         }
     };
+
+    // Mostrar nada mientras verifica sesión
+    if (status === "loading" || status === "authenticated") {
+        return (
+            <div className="min-h-screen flex items-center justify-center bg-[#f8fafc]">
+                <Loader2 className="animate-spin text-gray-400" size={32} />
+            </div>
+        );
+    }
 
     return (
         <div className="min-h-screen flex items-center justify-center bg-[#f8fafc] p-8 relative overflow-hidden font-sans">
@@ -65,8 +82,8 @@ export default function LoginPage() {
                             <div className="relative bg-white border border-gray-100 rounded-[1.8rem] shadow-sm focus-within:shadow-premium focus-within:border-primary/20 transition-all duration-300">
                                 <Mail className="absolute left-6 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within/input:text-primary transition-colors" size={20} />
                                 <input
-                                    type="email"
-                                    placeholder="Tu correo administrativo"
+                                    type="text"
+                                    placeholder="Usuario"
                                     required
                                     value={email}
                                     onChange={e => setEmail(e.target.value)}
@@ -79,13 +96,21 @@ export default function LoginPage() {
                             <div className="relative bg-white border border-gray-100 rounded-[1.8rem] shadow-sm focus-within:shadow-premium focus-within:border-primary/20 transition-all duration-300">
                                 <Lock className="absolute left-6 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within/input:text-primary transition-colors" size={20} />
                                 <input
-                                    type="password"
+                                    type={showPassword ? "text" : "password"}
                                     placeholder="Tu contraseña maestra"
                                     required
                                     value={password}
                                     onChange={e => setPassword(e.target.value)}
-                                    className="w-full pl-16 pr-8 py-5 bg-transparent border-none rounded-[1.8rem] outline-none text-sm font-bold placeholder:text-gray-300"
+                                    className="w-full pl-16 pr-16 py-5 bg-transparent border-none rounded-[1.8rem] outline-none text-sm font-bold placeholder:text-gray-300"
                                 />
+                                <button
+                                    type="button"
+                                    onClick={() => setShowPassword((value) => !value)}
+                                    className="absolute right-5 top-1/2 -translate-y-1/2 text-gray-400 transition hover:text-primary"
+                                    aria-label={showPassword ? "Ocultar contraseña" : "Mostrar contraseña"}
+                                >
+                                    {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
+                                </button>
                             </div>
                         </div>
                     </div>

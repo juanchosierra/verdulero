@@ -9,12 +9,25 @@ datasource db {
 
 model StoreConfig {
   id                 Int     @id @default(autoincrement())
+  nombreTienda       String  @default("El Verdulero")
+  siteUrl            String  @default("https://elverdulero.com.co")
+  logoUrl            String  @default("https://elverdulero.com.co/wp-content/uploads/2026/01/verdulerologo@4x-1400x389.png")
+  supportWhatsapp    String  @default("573176778089")
   horaCorte          String  @default("14:00")
+  deliveryWindow     String  @default("10:00 AM a 5:00 PM")
   emailAdmin         String  @default("ventas@elverdulero.com.co")
   emailsCopia        String  @default("")
+  pedidoMinimo       Int     @default(0)
+  envioGratisDesde   Int     @default(69900)
+  ciudadesOperacion  String  @default("[{\"value\":\"bucaramanga\",\"label\":\"Bucaramanga\",\"enabled\":true,\"shipping\":10000},{\"value\":\"floridablanca\",\"label\":\"Floridablanca\",\"enabled\":true,\"shipping\":10000},{\"value\":\"giron\",\"label\":\"Girón\",\"enabled\":true,\"shipping\":10000},{\"value\":\"piedecuesta\",\"label\":\"Piedecuesta\",\"enabled\":true,\"shipping\":10000},{\"value\":\"ruitoque\",\"label\":\"Ruitoque\",\"enabled\":true,\"shipping\":10000}]")
+  respuestasRapidas  String  @default("[]")
+  reportesVentasActivos Boolean @default(false)
+  reportesVentasHora  String  @default("18:00")
+  reportesVentasEmails String @default("")
   diasFestivos       String  @default("[]")
   mensajeBienvenida  String  @default("¡Qué tal, marchante! Bienvenido a la plaza digital. Soy El Verdulero, ¿qué le vamos a poner a la canasta hoy?")
   personalidad       String  @default("Eres El Verdulero, un asistente carismático...")
+  perfilConversacional String @default("asistente_familiar")
   wcUrl              String?
   wcConsumerKey      String?
   wcConsumerSecret   String?
@@ -34,11 +47,22 @@ model User {
 model ChatSession {
   id           String    @id @default(cuid())
   customerName String?
+  customerEmail String?
+  customerCity  String?
+  customerAddress String?
   phoneNumber  String?
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
   isActive     Boolean   @default(true)
   messages     Message[]
+}
+
+model OrderDraft {
+  id        String   @id @default(cuid())
+  sessionId String   @unique
+  data      String   @default("{\"cart\":[],\"pending\":[]}")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 model Message {
@@ -54,10 +78,13 @@ model Order {
   id              Int      @id @default(autoincrement())
   createdAt       DateTime @default(now())
   customerName    String
+  customerEmail   String?
   customerPhone   String
   customerAddress String
   customerCity    String
   items           String
+  subtotal        Float    @default(0)
+  shipping        Float    @default(0)
   total           Float
   status          String   @default("Pendiente")
   pdfUrl          String?
@@ -66,8 +93,69 @@ model Order {
 model Customer {
   phone       String   @id
   name        String
+  email       String?
   lastAddress String?
   lastCity    String?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
+}
+
+model ErrorReport {
+  id                String   @id @default(cuid())
+  sessionId         String?
+  messageIndex      Int?
+  messageRole       String
+  messageContent    String
+  reporterNote      String?
+  previousMessage   String?
+  nextMessage       String?
+  conversationSlice String
+  pageUrl           String?
+  status            String   @default("nuevo")
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+}
+
+model LearnedRule {
+  id          String   @id @default(cuid())
+  rule        String
+  status      String   @default("suggested")
+  source      String?
+  notes       String?
+  sampleCount Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model LearningRun {
+  id                 String   @id @default(cuid())
+  summary            String
+  findings           Json?
+  reportsAnalyzed    Int      @default(0)
+  messagesAnalyzed   Int      @default(0)
+  suggestionsCreated Int      @default(0)
+  createdAt          DateTime @default(now())
+}
+
+model SalesReportDispatch {
+  id         String   @id @default(cuid())
+  dateKey    String   @unique
+  period     String
+  recipients String
+  status     String   @default("sent")
+  summary    String?
+  createdAt  DateTime @default(now())
+}
+
+model LearningEvent {
+  id                String   @id
+  sessionId         String
+  buyerName         String?
+  userMessage       String
+  assistantText     String
+  action            String
+  extractedEntities String
+  stateSnapshot     String
+  recommendations   String
+  createdAt         DateTime @default(now())
 }

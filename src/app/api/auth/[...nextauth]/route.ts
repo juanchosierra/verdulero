@@ -1,23 +1,28 @@
 import NextAuth from "next-auth";
+import type { NextAuthOptions } from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
-import { PrismaAdapter } from "@auth/prisma-adapter";
 import { prisma } from "@/lib/prisma";
 import bcrypt from "bcryptjs";
 
-export const authOptions = {
-    adapter: PrismaAdapter(prisma),
+export const authOptions: NextAuthOptions = {
     providers: [
         CredentialsProvider({
             name: "Credentials",
             credentials: {
-                email: { label: "Email", type: "email" },
+                email: { label: "Usuario", type: "text" },
                 password: { label: "Password", type: "password" }
             },
             async authorize(credentials) {
                 if (!credentials?.email || !credentials?.password) return null;
 
-                const user = await prisma.user.findUnique({
-                    where: { email: credentials.email }
+                // Buscar por nombre de usuario (campo name) o por email — sin distinción de mayúsculas
+                const user = await prisma.user.findFirst({
+                    where: {
+                        OR: [
+                            { name: { equals: credentials.email, mode: "insensitive" } },
+                            { email: { equals: credentials.email, mode: "insensitive" } }
+                        ]
+                    }
                 });
 
                 if (!user) return null;
@@ -36,6 +41,18 @@ export const authOptions = {
     ],
     session: {
         strategy: "jwt" as const,
+    },
+    callbacks: {
+        async jwt({ token, user }) {
+            if (user?.id) token.id = user.id;
+            return token;
+        },
+        async session({ session, token }) {
+            if (session.user && token?.id) {
+                (session.user as typeof session.user & { id?: string }).id = token.id as string;
+            }
+            return session;
+        }
     },
     pages: {
         signIn: "/admin/login",

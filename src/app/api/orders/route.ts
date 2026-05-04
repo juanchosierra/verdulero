@@ -2,19 +2,59 @@ import { jsPDF } from 'jspdf';
 import nodemailer from 'nodemailer';
 import { prisma } from '@/lib/prisma';
 import { NextResponse } from 'next/server';
+import { checkRateLimit } from '@/lib/rate-limit';
+import { buildOrderEmailHtml, buildOrderEmailText, formatCop } from '@/lib/order-email';
+import { buildDeliverySchedule } from '@/lib/delivery';
+import { calculateShippingAmount, minimumOrderThreshold } from '@/lib/store-rules';
 
 export async function POST(req: Request) {
     try {
-        const { customer_data, items, total } = await req.json();
+        if (process.env.NODE_ENV === "production" && process.env.ENABLE_PUBLIC_ORDER_API !== "true") {
+            return NextResponse.json({ error: "Public order endpoint disabled" }, { status: 403 });
+        }
+
+        const rate = checkRateLimit(req, "public-orders", 5, 60_000);
+        if (!rate.ok) {
+            return NextResponse.json(
+                { error: "Demasiadas solicitudes de pedido. Intenta de nuevo en un momento." },
+                { status: 429, headers: { "Retry-After": String(rate.retryAfterSeconds) } }
+            );
+        }
+
+        const { customer_data, items } = await req.json();
+        if (!customer_data?.nombre || !customer_data?.telefono || !customer_data?.direccion || !customer_data?.ciudad) {
+            return NextResponse.json({ error: "Customer data incomplete" }, { status: 400 });
+        }
+        if (!Array.isArray(items) || items.length === 0) {
+            return NextResponse.json({ error: "Order items required" }, { status: 400 });
+        }
+        const subtotal = items.reduce((acc: number, item: any) => acc + (Number(item.quantity || 0) * Number(item.price || 0)), 0);
+        if (!Number.isFinite(subtotal) || subtotal <= 0) {
+            return NextResponse.json({ error: "Invalid total" }, { status: 400 });
+        }
+
+        const config = await prisma.storeConfig.findFirst();
+        const pedidoMinimo = minimumOrderThreshold(config);
+        if (subtotal < pedidoMinimo) {
+            return NextResponse.json(
+                { error: `Pedido mínimo no alcanzado. Faltan $${pedidoMinimo - subtotal}.`, pedidoMinimo },
+                { status: 400 }
+            );
+        }
+        const shipping = calculateShippingAmount(subtotal, customer_data.ciudad, config);
+        const total = subtotal + shipping;
 
         // 1. Save to database
         const order = await prisma.order.create({
             data: {
                 customerName: customer_data.nombre,
+                customerEmail: customer_data.correo || null,
                 customerPhone: customer_data.telefono,
                 customerAddress: customer_data.direccion,
                 customerCity: customer_data.ciudad,
                 items: JSON.stringify(items),
+                subtotal,
+                shipping,
                 total: total,
                 status: 'Pendiente'
             }
@@ -32,7 +72,7 @@ export async function POST(req: Request) {
         doc.text('Frescura en su puerta', 40, 15, { align: 'center' });
         doc.text('--------------------------------', 40, 20, { align: 'center' });
         doc.text(`PEDIDO: #${order.id}`, 10, 25);
-        doc.text(`FECHA: ${new Date().toLocaleString()}`, 10, 30);
+        doc.text(`FECHA: ${new Date().toLocaleString('es-CO', { timeZone: 'America/Bogota' })}`, 10, 30);
         doc.text('--------------------------------', 40, 35, { align: 'center' });
         doc.text(`CLIENTE: ${customer_data.nombre}`, 10, 40);
         doc.text(`TEL: ${customer_data.telefono}`, 10, 45);
@@ -56,22 +96,51 @@ export async function POST(req: Request) {
         const pdfBuffer = Buffer.from(doc.output('arraybuffer'));
 
         // 3. Send Email
-        const config = await prisma.storeConfig.findFirst();
+        const deliverySchedule = buildDeliverySchedule(config?.horaCorte, new Date(), config?.deliveryWindow);
+        const deliveryFullDate = deliverySchedule.fullDateLabel;
+        const deliveryWindow = deliverySchedule.window;
+        const siteUrl = config?.siteUrl || config?.wcUrl || process.env.NEXT_PUBLIC_WC_URL || process.env.NEXT_PUBLIC_APP_URL || 'https://elverdulero.com.co';
+        const supportWhatsapp = String(config?.supportWhatsapp || '573176778089').replace(/\D/g, '') || '573176778089';
+        const storeName = config?.nombreTienda || 'El Verdulero';
+
+        if (!process.env.EMAIL_HOST || !process.env.EMAIL_PORT || !process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
+            console.warn('Email config missing: skipping order email send.');
+            return NextResponse.json({ success: true, orderId: order.id, adminEmailSent: false, customerEmailSent: false });
+        }
+
         const transporter = nodemailer.createTransport({
             host: process.env.EMAIL_HOST,
             port: Number(process.env.EMAIL_PORT),
+            secure: Number(process.env.EMAIL_PORT) === 465,
             auth: {
                 user: process.env.EMAIL_USER,
                 pass: process.env.EMAIL_PASS
             }
         });
 
+        const emailData = {
+            orderId: order.id,
+            customer: customer_data,
+            items,
+            subtotal,
+            shipping,
+            total,
+            deliveryFullDate,
+            deliveryWindow,
+            supportWhatsapp,
+            supportWhatsappLabel: supportWhatsapp,
+            siteUrl,
+            logoUrl: config?.logoUrl || undefined,
+            storeName
+        };
+
         const mailOptions = {
-            from: `"El Verdulero" <${process.env.EMAIL_USER}>`,
+            from: `"${storeName}" <${process.env.EMAIL_USER}>`,
             to: config?.emailAdmin || "ventas@elverdulero.com.co",
             cc: config?.emailsCopia || "",
-            subject: `🍎 NUEVO PEDIDO - ${customer_data.nombre} - $${total}`,
-            text: `Se ha recibido un nuevo pedido de ${customer_data.nombre}. Adjunto encontrarás la tirilla POS.`,
+            subject: `🍎 NUEVO PEDIDO #${order.id} - ${customer_data.nombre} - ${formatCop(total)}`,
+            text: buildOrderEmailText({ ...emailData, adminView: true }),
+            html: buildOrderEmailHtml({ ...emailData, adminView: true }),
             attachments: [{
                 filename: `pedido-${order.id}.pdf`,
                 content: pdfBuffer
@@ -79,8 +148,24 @@ export async function POST(req: Request) {
         };
 
         await transporter.sendMail(mailOptions);
+        let customerEmailSent = false;
 
-        return NextResponse.json({ success: true, orderId: order.id });
+        if (customer_data?.correo) {
+            await transporter.sendMail({
+                from: `"${storeName}" <${process.env.EMAIL_USER}>`,
+                to: customer_data.correo,
+                subject: `✅ Confirmación de pedido #${order.id} - ${storeName}`,
+                text: buildOrderEmailText(emailData),
+                html: buildOrderEmailHtml(emailData),
+                attachments: [{
+                    filename: `pedido-${order.id}.pdf`,
+                    content: pdfBuffer
+                }]
+            });
+            customerEmailSent = true;
+        }
+
+        return NextResponse.json({ success: true, orderId: order.id, adminEmailSent: true, customerEmailSent });
     } catch (error) {
         console.error('Order creation error:', error);
         return NextResponse.json({ error: 'Failed to create order' }, { status: 500 });

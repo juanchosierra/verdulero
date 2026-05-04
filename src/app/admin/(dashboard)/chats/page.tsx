@@ -26,6 +26,7 @@ export default function ChatsAdminPage() {
     const [sending, setSending] = useState(false);
     const [intervencionGlobal, setIntervencionGlobal] = useState(false);
     const [input, setInput] = useState("");
+    const [search, setSearch] = useState("");
     const scrollRef = useRef<HTMLDivElement>(null);
 
     const fetchSessions = async () => {
@@ -118,6 +119,8 @@ export default function ChatsAdminPage() {
                     <div className="relative group">
                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-emerald-500 transition-colors" size={14} />
                         <input
+                            value={search}
+                            onChange={e => setSearch(e.target.value)}
                             placeholder="Buscar cliente..."
                             className="w-full pl-9 pr-4 py-2 bg-white border border-slate-200 rounded-lg text-xs font-bold outline-none focus:ring-2 focus:ring-emerald-500/10 placeholder:text-slate-300 transition-all"
                         />
@@ -130,13 +133,19 @@ export default function ChatsAdminPage() {
                             <Loader2 className="animate-spin text-emerald-500" size={20} />
                             <p className="text-[9px] font-black text-slate-300 uppercase">Sincronizando chats...</p>
                         </div>
-                    ) : sessions.length === 0 ? (
+                    ) : sessions.filter(s =>
+                        !search || (s.customerName || "").toLowerCase().includes(search.toLowerCase()) ||
+                        (s.phoneNumber || "").includes(search)
+                    ).length === 0 ? (
                         <div className="p-10 text-center space-y-3">
                             <MessageSquare className="mx-auto text-slate-200" size={32} />
                             <p className="text-[10px] font-bold text-slate-400 uppercase">Sin chats activos</p>
                         </div>
                     ) : (
-                        sessions.map(s => (
+                        sessions.filter(s =>
+                            !search || (s.customerName || "").toLowerCase().includes(search.toLowerCase()) ||
+                            (s.phoneNumber || "").includes(search)
+                        ).map(s => (
                             <button
                                 key={s.id}
                                 onClick={() => setSelectedSession(s)}

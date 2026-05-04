@@ -1,7 +1,11 @@
 import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
+import { requireAdmin } from "@/lib/admin-auth";
 
-export async function GET() {
+export async function GET(req: Request) {
+    const authError = await requireAdmin(req);
+    if (authError) return authError;
+
     try {
         const chats = await prisma.chatSession.findMany({
             include: {
@@ -16,13 +20,15 @@ export async function GET() {
             }
         });
         return NextResponse.json(chats);
-    } catch (error) {
-        console.error("Chats Fetch Error:", error);
+    } catch {
         return NextResponse.json({ error: "Failed to fetch chats" }, { status: 500 });
     }
 }
 
 export async function PATCH(req: Request) {
+    const authError = await requireAdmin(req);
+    if (authError) return authError;
+
     try {
         const { id, isActive } = await req.json();
         const chat = await prisma.chatSession.update({
@@ -30,12 +36,15 @@ export async function PATCH(req: Request) {
             data: { isActive, updatedAt: new Date() }
         });
         return NextResponse.json(chat);
-    } catch (error) {
+    } catch {
         return NextResponse.json({ error: "Failed to update chat" }, { status: 500 });
     }
 }
 
 export async function POST(req: Request) {
+    const authError = await requireAdmin(req);
+    if (authError) return authError;
+
     try {
         const { sessionId, content } = await req.json();
 
@@ -53,8 +62,7 @@ export async function POST(req: Request) {
         });
 
         return NextResponse.json(message);
-    } catch (error) {
-        console.error("Operator Message Error:", error);
+    } catch {
         return NextResponse.json({ error: "Failed to send message" }, { status: 500 });
     }
 }

@@ -4,10 +4,19 @@
   "main": "index.js",
   "scripts": {
     "dev": "next dev",
-    "build": "prisma generate && prisma db push && next build",
+    "build": "prisma generate && next build",
     "postinstall": "prisma generate",
     "start": "next start -p ${PORT:-3000}",
-    "lint": "next lint"
+    "lint": "next lint",
+    "test:chat-regression": "node scripts/run-chat-regression.mjs",
+    "test:chat-critical": "CRITICAL_SCENARIOS=R001,R003,R005,R007,R009,R010,R011,R012,R013 node scripts/run-chat-regression.mjs",
+    "training:export": "node scripts/export-training-corpus.mjs",
+    "learning:run": "curl -X POST http://localhost:3000/api/admin/learning",
+    "simulate:100": "SIM_COUNT=100 node scripts/run-simulated-conversations.mjs",
+    "simulate:500": "SIM_COUNT=500 node scripts/run-simulated-conversations.mjs",
+    "simulate:2000": "SIM_COUNT=2000 SIM_CONCURRENCY=25 node scripts/run-simulated-conversations.mjs",
+    "simulate:1000:aggressive": "SIM_SUITE=aggressive SIM_COUNT=1000 SIM_CONCURRENCY=25 node scripts/run-simulated-conversations.mjs",
+    "deploy:guarded": "npm run test:chat-critical && vercel --prod"
   },
   "keywords": [],
   "author": "",

@@ -1,0 +1,5 @@
+llama.cpp/
+**/llama.cpp/
+.env
+.env.*
+!.env.example
