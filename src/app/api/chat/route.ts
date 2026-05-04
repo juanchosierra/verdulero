@@ -3034,7 +3034,9 @@ function isAvailabilityQuestion(message: string) {
     return /(tiene|hay|maneja|vende|cuenta con)\s+/.test(text)
         || /(hay|tiene)\s+\w+\??$/.test(text)
         || /(que\s+(frutas|verduras|productos)\s+(tienen|hay|manejan|venden|disponibles))/.test(text)
-        || /(que\s+\w+\s+tienes)/.test(text);
+        || /(que\s+\w+\s+tienes)/.test(text)
+        || /(que|cuales)\s+(otro\s*s?|otros|otras|tipos?|variedades?|opciones?)\s+(de\s+)?[\w\s]+\s+(hay|tienes|tiene|manejan|venden)\??$/.test(text)
+        || /(que|cuales)\s+(hay|tienes|tiene|manejan|venden)\s+(de\s+)?[\w\s]+\??$/.test(text);
 }
 
 function extractProductFromPriceQuestion(message: string) {
@@ -3048,6 +3050,23 @@ function extractProductFromPriceQuestion(message: string) {
 
 function extractProductFromAvailabilityQuestion(message: string) {
     const text = stripLeadingConversationFillers(message);
+    const normalized = stripDiacritics(normalizeText(text));
+    const optionsMatch = normalized.match(/(?:que|cuales)\s+(?:otro\s*s?|otros|otras|tipos?|variedades?|opciones?)\s+(?:de\s+)?(.+?)\s+(?:hay|tienes|tiene|manejan|venden)\??$/i);
+    if (optionsMatch?.[1]) {
+        return normalizeRequestedProductTerm(optionsMatch[1]
+            .replace(/\b(de|el|la|los|las)\b/g, " ")
+            .replace(/\s+/g, " ")
+            .trim());
+    }
+
+    const invertedOptionsMatch = normalized.match(/(?:que|cuales)\s+(?:hay|tienes|tiene|manejan|venden)\s+(?:de\s+)?(.+?)\??$/i);
+    if (invertedOptionsMatch?.[1]) {
+        return normalizeRequestedProductTerm(invertedOptionsMatch[1]
+            .replace(/\b(de|el|la|los|las)\b/g, " ")
+            .replace(/\s+/g, " ")
+            .trim());
+    }
+
     return normalizeRequestedProductTerm(text
         .replace(/(que\s+(frutas|verduras|productos)\s+(tienen|hay|manejan|venden|disponibles)|que\s+\w+\s+tienes|tiene|hay|maneja|vende|cuenta con|disponible|disponibles|tienes)/g, " ")
         .replace(/\b(kilo|kilos|kg|libra|libras|lb|unidad|unidades|und|carton|cartones|bidon|bidones|canastilla|canastillas|lt|lts|litro|litros|bja|bandeja|bandejas|atado|atados|rama|ramas|ramo|ramos|de|el|la|los|las)\b/g, " ")
@@ -3776,6 +3795,16 @@ export async function POST(req: Request) {
 
         if (draft.pendingVariant) {
             const pendingVariant = draft.pendingVariant;
+            if (isAvailabilityQuestion(lastUserContent) || isPriceQuestion(lastUserContent)) {
+                const reply = isAvailabilityQuestion(lastUserContent)
+                    ? (await availabilityReply(lastUserContent, config)) || variantPrompt(pendingVariant.searchTerm, pendingVariant.options)
+                    : (await priceReply(lastUserContent, config)) || variantPrompt(pendingVariant.searchTerm, pendingVariant.options);
+                if (sessionId) {
+                    await prisma.message.create({ data: { sessionId, role: "assistant", content: reply } });
+                }
+                return assistantJson(reply);
+            }
+
             if (isDoneOrderingIntent(lastUserContent) || isCheckoutIntent(lastUserContent)) {
                 const reply = `${variantPrompt(pendingVariant.searchTerm, pendingVariant.options)}\nAntes de cerrar, me falta escoger cuál ${pendingVariant.searchTerm} le anoto.`;
                 if (sessionId) {

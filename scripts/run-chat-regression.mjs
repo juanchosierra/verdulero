@@ -417,6 +417,25 @@ const scenarios = [
     steps: [
       ["5 piñas", [/(piña perolera|piña oro miel|cual le doy|opciones reales)/i]]
     ]
+  },
+  {
+    id: "R026",
+    name: "pregunta_otras_variantes_no_agrega",
+    bootstrapProfile: {
+      correo: "$EMAIL",
+      ciudad: "$CITY",
+      nombre: "Ana"
+    },
+    steps: [
+      ["tomate", [/(tomate|cual le doy|opciones reales)/i]],
+      ["que otros tomates hay", [/(tomate|opciones reales|cual le doy|si tengo|cat[aá]logo)/i]]
+    ],
+    assert(history) {
+      const last = String(history[history.length - 1]?.reply || "").toLowerCase();
+      if (/(ya los agregu[eé]|le agregu[eé]|subtotal|qu[eé] m[aá]s necesita)/i.test(last)) {
+        throw new Error("Interpretó una pregunta de variantes como selección/agregado a canasta.");
+      }
+    }
   }
 ];
 
