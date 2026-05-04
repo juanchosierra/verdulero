@@ -1583,6 +1583,7 @@ async function persistCustomerProfile(sessionId: string | null, profile: Custome
 function parseOrderIntent(message: string): { quantity: number | null; product: string; requestedUnit?: string | null } | null {
     if (extractEmail(message) && !hasEmbeddedOrderSignal(message)) return null;
     if (isLikelyAddressText(message) && !hasEmbeddedOrderSignal(message)) return null;
+    if (parseRemoveItemMessage(message)) return null;
     if ((isStartOrderIntent(message) || isResumePreviousRequestIntent(message)) && !hasConcreteOrderDetail(message)) return null;
     if (isNewBasketChoice(message) && !hasConcreteOrderDetail(message)) return null;
     if (isGreetingMessage(message) && !hasConcreteOrderDetail(message)) return null;
@@ -1688,6 +1689,7 @@ function parseOrderIntent(message: string): { quantity: number | null; product: 
 function parseMultipleOrderIntents(message: string): ParsedIntent[] {
     if (extractEmail(message) && !hasEmbeddedOrderSignal(message)) return [];
     if (isLikelyAddressText(message) && !hasEmbeddedOrderSignal(message)) return [];
+    if (parseRemoveItemMessage(message)) return [];
     if ((isStartOrderIntent(message) || isResumePreviousRequestIntent(message)) && !hasConcreteOrderDetail(message)) return [];
 
     const normalizedMessage = collapseCompositeQuantityPhrases(normalizeQuantityWords(message));
@@ -1855,7 +1857,16 @@ function wasOrderJustConfirmed(messages: ChatMessage[]) {
 
 function isFrustrationMessage(message: string) {
     const text = stripDiacritics(normalizeText(message));
-    return /(no vales|no sirve|no entiendes|estas jodido|tas jodido|joda|monda|carajos|que pasa|que pasaaaa|idiota)/.test(text);
+    return /(no vales|no sirve|no entiendes|estas jodido|tas jodido|joda|monda|carajos|que pasa|que pasaaaa|idiota|bobad|no me vaya a salir|no me salgas)/.test(text);
+}
+
+function parseRemoveItemMessage(message: string): { product: string } | null {
+    const text = stripDiacritics(normalizeText(message)).replace(/\s+/g, " ").trim();
+    const match = text.match(/\b(?:quite|quita|quitar|saque|saca|sacar|elimine|elimina|eliminar|borre|borra|borrar|remueva|remueve|remover)\s+(?:de\s+la\s+canasta\s+)?(?:el|la|los|las|un|una|unos|unas)?\s*(.+)$/i);
+    if (!match?.[1]) return null;
+    const product = normalizeRequestedProductTerm(match[1]);
+    if (!product || isUnitOnlyText(product)) return null;
+    return { product };
 }
 
 function extractQuantityUnitOnly(message: string): { quantity: number; unit: "lb" | "kg" | "und" } | null {
@@ -4256,6 +4267,28 @@ export async function POST(req: Request) {
                 }
                 return assistantJson(availability);
             }
+        }
+
+        const removeRequest = parseRemoveItemMessage(lastUserContent);
+        if (removeRequest) {
+            const removeTokens = tokenizeForMatch(removeRequest.product);
+            const index = draft.cart.findIndex((item) => hasTokenMatch(item.name, removeTokens));
+            if (index >= 0) {
+                const [removed] = draft.cart.splice(index, 1);
+                draft.awaitingCheckoutConfirmation = false;
+                await saveDraft(sessionId, draft);
+                const reply = `Listo, veci. Quité ${removed.name} de la canasta. ¿Qué más necesita?`;
+                if (sessionId) {
+                    await prisma.message.create({ data: { sessionId, role: "assistant", content: reply } });
+                }
+                return assistantJson(reply);
+            }
+
+            const reply = `No veo ${removeRequest.product} en la canasta, veci. ${draft.cart.length > 0 ? `Esto es lo que lleva:\n${cartSummary(draft.cart)}` : "La canasta está vacía todavía."}`;
+            if (sessionId) {
+                await prisma.message.create({ data: { sessionId, role: "assistant", content: reply } });
+            }
+            return assistantJson(reply);
         }
 
         const ambiguousProduct = detectAmbiguousQuantityProduct(lastUserContent);

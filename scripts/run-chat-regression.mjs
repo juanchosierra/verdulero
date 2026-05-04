@@ -436,6 +436,61 @@ const scenarios = [
         throw new Error("Interpretó una pregunta de variantes como selección/agregado a canasta.");
       }
     }
+  },
+  {
+    id: "R027",
+    name: "typo_silantro_resuelve_cilantro",
+    bootstrapProfile: {
+      correo: "$EMAIL",
+      ciudad: "$CITY",
+      nombre: "Ana"
+    },
+    steps: [
+      ["media libra de silantro", [/(cilantro|atado|atados|no en lb|no en libra)/i]]
+    ],
+    assert(history) {
+      const last = String(history[history.length - 1]?.reply || "");
+      if (/no encontr[eé].*silantro/i.test(last)) {
+        throw new Error("No corrigió typo 'silantro' hacia cilantro.");
+      }
+    }
+  },
+  {
+    id: "R028",
+    name: "hostil_sin_pedido_no_inventa_producto",
+    bootstrapProfile: {
+      correo: "$EMAIL",
+      ciudad: "$CITY",
+      nombre: "Ana"
+    },
+    steps: [
+      ["no me vaya a salir con bobadas", [/(perd[oó]n|arranquemos limpio|producto y cantidad)/i]]
+    ],
+    assert(history) {
+      const last = String(history[history.length - 1]?.reply || "");
+      if (/(si hay|cu[aá]ntas|cu[aá]ntos|le agregu[eé]|subtotal|uchuva|tomate|papa)/i.test(last)) {
+        throw new Error("Inventó producto ante una frase hostil sin pedido.");
+      }
+    }
+  },
+  {
+    id: "R029",
+    name: "quitar_producto_no_busca_variante",
+    bootstrapProfile: {
+      correo: "$EMAIL",
+      ciudad: "$CITY",
+      nombre: "Ana"
+    },
+    steps: [
+      ["dame 2 libras de zanahoria", [/(zanahoria|subtotal|le agreg)/i]],
+      ["quite la papa", [/(no veo papa|canasta|zanahoria|no tienes papa)/i]]
+    ],
+    assert(history) {
+      const last = String(history[history.length - 1]?.reply || "");
+      if (/(opciones reales|cu[aá]l le doy|papa criolla|papa pastusa)/i.test(last)) {
+        throw new Error("Interpretó 'quite la papa' como búsqueda/compra de papa.");
+      }
+    }
   }
 ];
 
