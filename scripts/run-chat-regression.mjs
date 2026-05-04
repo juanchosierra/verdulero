@@ -491,6 +491,33 @@ const scenarios = [
         throw new Error("Interpretó 'quite la papa' como búsqueda/compra de papa.");
       }
     }
+  },
+  {
+    id: "R030",
+    name: "pedido_largo_no_pierde_cola_variantes",
+    bootstrapProfile: {
+      correo: "$EMAIL",
+      ciudad: "$CITY",
+      nombre: "Ana"
+    },
+    steps: [
+      ["ponme 2 libras de tomate, 1 libra de papa, 3 aguacates, 1 atado de cilantro y 5 limones", [/(tomate|opciones reales|cual le doy|cu[aá]l le doy)/i]],
+      ["tomate cherry", [/(papa|opciones reales|cual le doy|cu[aá]l le doy|pendientes)/i]],
+      ["papa pastusa lavada", [/(aguacate|opciones reales|cual le doy|cu[aá]l le doy|pendientes)/i]],
+      ["aguacate hass", [/(cilantro|limon|lim[oó]n|opciones reales|qu[eé] m[aá]s necesita|pendientes)/i]],
+      ["limon criollo", [/(tomate cherry|papa pastusa|aguacate hass|cilantro|limon criollo|qu[eé] m[aá]s necesita|subtotal)/i]]
+    ],
+    assert(history) {
+      const combined = String(history.map((h) => h.reply).join("\n")).toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+      for (const token of ["tomate cherry", "papa pastusa", "aguacate hass"]) {
+        if (!combined.includes(token)) {
+          throw new Error(`Perdió un producto de la cola larga: ${token}.`);
+        }
+      }
+      if (!combined.includes("cilantro") && !combined.includes("limon")) {
+        throw new Error("No continuó con los productos finales de la cola larga.");
+      }
+    }
   }
 ];
 

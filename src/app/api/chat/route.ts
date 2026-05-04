@@ -2769,6 +2769,19 @@ async function continueFollowupIntents(
 
     const { resolved, notFound, substitutionNotes, ambiguous, unitClarification, quantityRestriction } = await resolveIntents(followups, draft.cart, config);
 
+    if (ambiguous) {
+        const mergedResolved = mergeResolvedIntoDraft(draft, resolved, explicitUnit);
+        armPendingVariant(draft, ambiguous, requestedUnitForSearchTerm(followups, ambiguous.searchTerm) || explicitUnit);
+        const pendingFollowups = unresolvedFollowupIntents(followups, mergedResolved, ambiguous.searchTerm);
+        draft.pendingVariant = {
+            ...draft.pendingVariant!,
+            followupIntents: pendingFollowups
+        };
+        return {
+            reply: `${resolvedItemsSummary(mergedResolved, substitutionNotes, notFound)}${variantPrompt(ambiguous.searchTerm, ambiguous.options)}${pendingIntentQueueText(pendingFollowups)}${missingUnitHintForIntents(followups)}`.trim()
+        };
+    }
+
     if (quantityRestriction) {
         const mergedResolved = mergeResolvedIntoDraft(draft, resolved, explicitUnit);
         draft.pendingQuantity = { item: quantityRestriction.item };
@@ -2785,19 +2798,6 @@ async function continueFollowupIntents(
         draft.pendingFollowupIntents = unresolvedAfterUnitClarification(followups, mergedResolved, unitClarification);
         return {
             reply: `${resolvedItemsSummary(mergedResolved)}${unitClarificationReply(unitClarification.intent, unitClarification.item)}`.trim()
-        };
-    }
-
-    if (ambiguous) {
-        const mergedResolved = mergeResolvedIntoDraft(draft, resolved, explicitUnit);
-        armPendingVariant(draft, ambiguous, requestedUnitForSearchTerm(followups, ambiguous.searchTerm) || explicitUnit);
-        const pendingFollowups = unresolvedFollowupIntents(followups, mergedResolved, ambiguous.searchTerm);
-        draft.pendingVariant = {
-            ...draft.pendingVariant!,
-            followupIntents: pendingFollowups
-        };
-        return {
-            reply: `${resolvedItemsSummary(mergedResolved, substitutionNotes, notFound)}${variantPrompt(ambiguous.searchTerm, ambiguous.options)}${pendingIntentQueueText(pendingFollowups)}${missingUnitHintForIntents(followups)}`.trim()
         };
     }
 
@@ -4506,6 +4506,26 @@ export async function POST(req: Request) {
                     }
                 }
                 const { resolved, notFound, substitutionNotes, ambiguous, unitClarification, quantityRestriction } = await resolveIntents(pendingIntents, draft.cart, config);
+                if (ambiguous) {
+                    const mergedResolved = mergeResolvedIntoDraft(draft, resolved, unitChoice);
+                    draft.pendingUnitIntents = [];
+                    draft.pendingUnitChoice = null;
+                    armPendingVariant(draft, ambiguous, unitChoice);
+                    const pendingFollowups = mergePendingIntentLists(
+                        draft.pendingFollowupIntents,
+                        unresolvedFollowupIntents(pendingIntents, mergedResolved, ambiguous.searchTerm)
+                    );
+                    draft.pendingVariant = {
+                        ...draft.pendingVariant!,
+                        followupIntents: pendingFollowups
+                    };
+                    await saveDraft(sessionId, draft);
+                    const reply = `${resolvedItemsSummary(mergedResolved, substitutionNotes, notFound)}${variantPrompt(ambiguous.searchTerm, ambiguous.options)}${pendingIntentQueueText(pendingFollowups)}${missingUnitHintForIntents(pendingIntents)}`.trim();
+                    if (sessionId) {
+                        await prisma.message.create({ data: { sessionId, role: "assistant", content: reply } });
+                    }
+                    return assistantJson(reply);
+                }
                 if (quantityRestriction) {
                     const mergedResolved = mergeResolvedIntoDraft(draft, resolved, unitChoice);
                     draft.pendingQuantity = { item: quantityRestriction.item };
@@ -4530,26 +4550,6 @@ export async function POST(req: Request) {
                     );
                     await saveDraft(sessionId, draft);
                     const reply = `${resolvedItemsSummary(mergedResolved, substitutionNotes, notFound)}${unitClarificationReply(unitClarification.intent, unitClarification.item)}`.trim();
-                    if (sessionId) {
-                        await prisma.message.create({ data: { sessionId, role: "assistant", content: reply } });
-                    }
-                    return assistantJson(reply);
-                }
-                if (ambiguous) {
-                    const mergedResolved = mergeResolvedIntoDraft(draft, resolved, unitChoice);
-                    draft.pendingUnitIntents = [];
-                    draft.pendingUnitChoice = null;
-                    armPendingVariant(draft, ambiguous, unitChoice);
-                    const pendingFollowups = mergePendingIntentLists(
-                        draft.pendingFollowupIntents,
-                        unresolvedFollowupIntents(pendingIntents, mergedResolved, ambiguous.searchTerm)
-                    );
-                    draft.pendingVariant = {
-                        ...draft.pendingVariant!,
-                        followupIntents: pendingFollowups
-                    };
-                    await saveDraft(sessionId, draft);
-                    const reply = `${resolvedItemsSummary(mergedResolved, substitutionNotes, notFound)}${variantPrompt(ambiguous.searchTerm, ambiguous.options)}${pendingIntentQueueText(pendingFollowups)}${missingUnitHintForIntents(pendingIntents)}`.trim();
                     if (sessionId) {
                         await prisma.message.create({ data: { sessionId, role: "assistant", content: reply } });
                     }
@@ -4617,6 +4617,27 @@ export async function POST(req: Request) {
                 }
             }
             const { resolved, notFound, ambiguous, unitClarification, quantityRestriction } = await resolveIntents(effectivePendingUnitIntents, draft.cart, config);
+            if (ambiguous) {
+                const pendingFollowups = effectivePendingUnitIntents;
+                const mergedResolved = mergeResolvedIntoDraft(draft, resolved, effectivePendingUnitChoice);
+                draft.pendingUnitIntents = [];
+                draft.pendingUnitChoice = null;
+                armPendingVariant(draft, ambiguous, effectivePendingUnitChoice);
+                const unresolvedPendingFollowups = mergePendingIntentLists(
+                    draft.pendingFollowupIntents,
+                    unresolvedFollowupIntents(pendingFollowups, mergedResolved, ambiguous.searchTerm)
+                );
+                draft.pendingVariant = {
+                    ...draft.pendingVariant!,
+                    followupIntents: unresolvedPendingFollowups
+                };
+                await saveDraft(sessionId, draft);
+                const reply = `${resolvedItemsSummary(mergedResolved, [], notFound)}${variantPrompt(ambiguous.searchTerm, ambiguous.options)}${pendingIntentQueueText(unresolvedPendingFollowups)}${missingUnitHintForIntents(pendingFollowups)}`.trim();
+                if (sessionId) {
+                    await prisma.message.create({ data: { sessionId, role: "assistant", content: reply } });
+                }
+                return assistantJson(reply);
+            }
             if (quantityRestriction) {
                 const mergedResolved = mergeResolvedIntoDraft(draft, resolved, effectivePendingUnitChoice);
                 draft.pendingQuantity = { item: quantityRestriction.item };
@@ -4641,27 +4662,6 @@ export async function POST(req: Request) {
                 );
                 await saveDraft(sessionId, draft);
                 const reply = `${resolvedItemsSummary(mergedResolved, [], notFound)}${unitClarificationReply(unitClarification.intent, unitClarification.item)}`.trim();
-                if (sessionId) {
-                    await prisma.message.create({ data: { sessionId, role: "assistant", content: reply } });
-                }
-                return assistantJson(reply);
-            }
-            if (ambiguous) {
-                const pendingFollowups = effectivePendingUnitIntents;
-                const mergedResolved = mergeResolvedIntoDraft(draft, resolved, effectivePendingUnitChoice);
-                draft.pendingUnitIntents = [];
-                draft.pendingUnitChoice = null;
-                armPendingVariant(draft, ambiguous, effectivePendingUnitChoice);
-                const unresolvedPendingFollowups = mergePendingIntentLists(
-                    draft.pendingFollowupIntents,
-                    unresolvedFollowupIntents(pendingFollowups, mergedResolved, ambiguous.searchTerm)
-                );
-                draft.pendingVariant = {
-                    ...draft.pendingVariant!,
-                    followupIntents: unresolvedPendingFollowups
-                };
-                await saveDraft(sessionId, draft);
-                const reply = `${resolvedItemsSummary(mergedResolved, [], notFound)}${variantPrompt(ambiguous.searchTerm, ambiguous.options)}${pendingIntentQueueText(unresolvedPendingFollowups)}${missingUnitHintForIntents(pendingFollowups)}`.trim();
                 if (sessionId) {
                     await prisma.message.create({ data: { sessionId, role: "assistant", content: reply } });
                 }
@@ -4846,6 +4846,24 @@ export async function POST(req: Request) {
             }
 
             const { resolved, notFound, substitutionNotes, ambiguous, unitClarification, quantityRestriction } = await resolveIntents(intents, draft.cart, config);
+            if (ambiguous) {
+                const mergedResolved = mergeResolvedIntoDraft(draft, resolved, extractUnitChoice(lastUserContent));
+                clearPendingOrderState(draft);
+                armPendingVariant(draft, ambiguous, extractUnitChoice(lastUserContent));
+                const pendingFollowups = mergePendingIntentLists(
+                    unresolvedFollowupIntents(intents, mergedResolved, ambiguous.searchTerm)
+                );
+                draft.pendingVariant = {
+                    ...draft.pendingVariant!,
+                    followupIntents: pendingFollowups
+                };
+                await saveDraft(sessionId, draft);
+                const reply = `${resolvedItemsSummary(mergedResolved, substitutionNotes, notFound)}${variantPrompt(ambiguous.searchTerm, ambiguous.options)}${pendingIntentQueueText(pendingFollowups)}${missingUnitHintForIntents(intents)}`.trim();
+                if (sessionId) {
+                    await prisma.message.create({ data: { sessionId, role: "assistant", content: reply } });
+                }
+                return assistantJson(reply);
+            }
             if (quantityRestriction) {
                 const mergedResolved = mergeResolvedIntoDraft(draft, resolved, extractUnitChoice(lastUserContent));
                 draft.pendingQuantity = { item: quantityRestriction.item };
@@ -4870,24 +4888,6 @@ export async function POST(req: Request) {
                 );
                 await saveDraft(sessionId, draft);
                 const reply = `${resolvedItemsSummary(mergedResolved, substitutionNotes, notFound)}${unitClarificationReply(unitClarification.intent, unitClarification.item)}`.trim();
-                if (sessionId) {
-                    await prisma.message.create({ data: { sessionId, role: "assistant", content: reply } });
-                }
-                return assistantJson(reply);
-            }
-            if (ambiguous) {
-                const mergedResolved = mergeResolvedIntoDraft(draft, resolved, extractUnitChoice(lastUserContent));
-                clearPendingOrderState(draft);
-                armPendingVariant(draft, ambiguous, extractUnitChoice(lastUserContent));
-                const pendingFollowups = mergePendingIntentLists(
-                    unresolvedFollowupIntents(intents, mergedResolved, ambiguous.searchTerm)
-                );
-                draft.pendingVariant = {
-                    ...draft.pendingVariant!,
-                    followupIntents: pendingFollowups
-                };
-                await saveDraft(sessionId, draft);
-                const reply = `${resolvedItemsSummary(mergedResolved, substitutionNotes, notFound)}${variantPrompt(ambiguous.searchTerm, ambiguous.options)}${pendingIntentQueueText(pendingFollowups)}${missingUnitHintForIntents(intents)}`.trim();
                 if (sessionId) {
                     await prisma.message.create({ data: { sessionId, role: "assistant", content: reply } });
                 }
