@@ -4165,10 +4165,7 @@ export async function POST(req: Request) {
                         : profile.correo
                             ? `Tu pedido quedó confirmado, pero el correo no salió en este intento. Si quieres, escríbenos al WhatsApp ${getSupportWhatsapp(config)} y te ayudamos de una.`
                             : `Tu pedido quedó confirmado. Si quieres la tirilla por correo, escríbenos al WhatsApp ${getSupportWhatsapp(config)}.`;
-                    const adminMailLine = (result as any)?.adminEmailSent
-                        ? "También le llegó copia al equipo de la tienda."
-                        : "Ojo: la copia al equipo no salió por correo en este intento.";
-                    const reply = `¡Pedido confirmado, veci! Su orden es #${(result as any).orderId}.\nTOTAL: $${total}\n${deliveryInfo.note}\n${customerMailLine}\n${adminMailLine}\nSi necesita cualquier cosa, nos puede escribir al WhatsApp ${getSupportWhatsapp(config)}.\n¡Gracias por comprar con ${getStoreName(config)}!`;
+                    const reply = `¡Pedido confirmado, veci! Su orden es #${(result as any).orderId}.\nTOTAL: $${total}\n${deliveryInfo.note}\n${customerMailLine}\nSi necesita cualquier cosa, nos puede escribir al WhatsApp ${getSupportWhatsapp(config)}.\n¡Gracias por comprar con ${getStoreName(config)}!`;
                     if (sessionId) {
                         await prisma.message.create({ data: { sessionId, role: "assistant", content: reply } });
                     }

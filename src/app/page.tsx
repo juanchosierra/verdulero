@@ -1870,10 +1870,6 @@ export default function ChatPage() {
 
             <div className="mx-auto max-w-[1720px] px-3 py-4 md:px-5">
                 <div className="app-chat-height flex gap-4">
-                <aside className="hidden xl:flex w-[330px] bg-white border border-gray-100 shadow-premium rounded-3xl overflow-hidden">
-                    {renderCatalogPanel(false)}
-                </aside>
-
                 <section className="flex-1 min-w-0 flex flex-col bg-white border border-gray-100 shadow-premium rounded-3xl overflow-hidden font-sans relative">
                     <div className="absolute top-0 left-0 w-full h-40 bg-gradient-to-b from-primary/5 to-transparent pointer-events-none -z-10" />
 
@@ -1912,13 +1908,6 @@ export default function ChatPage() {
                             </div>
                         </div>
                         <div className="flex w-full shrink-0 items-center justify-between gap-2 sm:w-auto sm:justify-end">
-                            <button
-                                type="button"
-                                onClick={() => setCatalogOpen(true)}
-                                className="flex-1 rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-[11px] font-black uppercase tracking-wide text-gray-700 transition hover:bg-gray-100 sm:flex-none xl:hidden"
-                            >
-                                Catálogo
-                            </button>
                             <button
                                 type="button"
                                 onClick={() => setMobileCartOpen(true)}
@@ -2141,6 +2130,10 @@ export default function ChatPage() {
                         </div>
                     </div>
                 </section>
+
+                <aside className="hidden xl:flex w-[330px] bg-white border border-gray-100 shadow-premium rounded-3xl overflow-hidden">
+                    {renderCatalogPanel(false)}
+                </aside>
 
                 <aside className="hidden lg:flex w-[380px] bg-white border border-gray-100 shadow-premium rounded-3xl flex-col overflow-hidden">
                     {renderCartPanel(false)}
