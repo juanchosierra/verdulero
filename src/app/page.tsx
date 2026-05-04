@@ -619,9 +619,10 @@ export default function ChatPage() {
 
     useEffect(() => {
         if (isLoading) return;
+        if (!preChatReady || resumeCandidate || checkoutOpen || trackingOpen || pendingErrorReport) return;
         const timer = setTimeout(() => inputRef.current?.focus(), 0);
         return () => clearTimeout(timer);
-    }, [isLoading]);
+    }, [isLoading, preChatReady, resumeCandidate, checkoutOpen, trackingOpen, pendingErrorReport]);
 
     const scrollToBottom = (behavior: ScrollBehavior = "smooth") => {
         messagesEndRef.current?.scrollIntoView({ behavior });
@@ -1594,92 +1595,94 @@ export default function ChatPage() {
                             exit={{ opacity: 0, y: 24, scale: 0.98 }}
                             className="mx-auto flex h-full max-w-2xl items-center justify-center"
                         >
-                            <div className="app-safe-panel w-full overflow-y-auto rounded-[2rem] border border-white/60 bg-white p-6 shadow-2xl md:p-8">
-                                <div className="max-w-xl">
-                                    <p className="text-[11px] font-black uppercase tracking-[0.22em] text-green-700">Antes de empezar</p>
-                                    <h2 className="mt-3 text-3xl font-black tracking-tight text-slate-900">
-                                        Déjame tu correo y arrancamos el mercado sin enredos.
-                                    </h2>
-                                    <p className="mt-3 text-sm font-semibold leading-relaxed text-slate-500">
-                                        Déjame tu <span className="text-slate-800">correo electrónico</span> y tu ciudad para empezar el chat. Si hace falta, te pido tu nombre y seguimos de una con tu mercado.
-                                    </p>
-                                    <div className="mt-4 rounded-2xl border border-lime-200 bg-lime-50 px-4 py-3">
-                                        <p className="text-[10px] font-black uppercase tracking-[0.18em] text-lime-700">Horario de pedidos</p>
-                                        <p className="mt-1 text-sm font-black text-lime-950">{deliverySchedule.statusLabel}</p>
-                                        <p className="mt-1 text-xs font-semibold text-lime-700">{deliverySchedule.countdownLabel}</p>
+                            <div className="app-safe-panel flex w-full flex-col overflow-hidden rounded-[2rem] border border-white/60 bg-white shadow-2xl">
+                                <div className="flex-1 overflow-y-auto p-5 md:p-8">
+                                    <div className="max-w-xl">
+                                        <p className="text-[11px] font-black uppercase tracking-[0.22em] text-green-700">Antes de empezar</p>
+                                        <h2 className="mt-2 text-2xl font-black tracking-tight text-slate-900 md:mt-3 md:text-3xl">
+                                            Déjame tu correo y arrancamos el mercado.
+                                        </h2>
+                                        <p className="mt-2 text-sm font-semibold leading-relaxed text-slate-500 md:mt-3">
+                                            Con tu <span className="text-slate-800">correo</span> y ciudad empezamos el chat y guardamos tu canasta.
+                                        </p>
+                                        <div className="mt-3 rounded-2xl border border-lime-200 bg-lime-50 px-4 py-3 md:mt-4">
+                                            <p className="text-[10px] font-black uppercase tracking-[0.18em] text-lime-700">Horario de pedidos</p>
+                                            <p className="mt-1 text-sm font-black text-lime-950">{deliverySchedule.statusLabel}</p>
+                                            <p className="mt-1 text-xs font-semibold text-lime-700">{deliverySchedule.countdownLabel}</p>
+                                        </div>
                                     </div>
+
+                                    <div className="mt-5 grid gap-3 md:mt-8 md:grid-cols-2 md:gap-4">
+                                        <label className="md:col-span-2">
+                                            <span className="mb-2 block text-[11px] font-black uppercase tracking-[0.18em] text-slate-500">Tu correo electrónico</span>
+                                            <input
+                                                value={preChatForm.correo}
+                                                onChange={(e) => setPreChatForm((prev) => ({ ...prev, correo: e.target.value }))}
+                                                placeholder="tu@correo.com"
+                                                className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4 text-sm font-bold text-slate-800 outline-none transition focus:border-green-300 focus:bg-white"
+                                            />
+                                        </label>
+
+                                        {lookupLoading && (
+                                            <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-bold text-slate-500 md:col-span-2">
+                                                Estoy revisando si ya te tengo registrado con ese correo...
+                                            </div>
+                                        )}
+
+                                        {lookupInfo?.found && (
+                                            <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-4 md:col-span-2">
+                                                <p className="text-[10px] font-black uppercase tracking-[0.18em] text-emerald-700">Cliente reconocido</p>
+                                                <p className="mt-2 text-sm font-bold text-emerald-950">
+                                                    Ya te reconocí. Puedes entrar de una y seguir con tu mercado.
+                                                </p>
+                                            </div>
+                                        )}
+
+                                        {lookupInfo && !lookupInfo.found && lookupEmail && (
+                                            <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-800 md:col-span-2">
+                                                No te encontré todavía. Déjame tu nombre y ciudad.
+                                            </div>
+                                        )}
+
+                                        <label className="md:col-span-1">
+                                            <span className="mb-2 block text-[11px] font-black uppercase tracking-[0.18em] text-slate-500">Ciudad</span>
+                                            <select
+                                                value={preChatForm.ciudad}
+                                                onChange={(e) => setPreChatForm((prev) => ({ ...prev, ciudad: e.target.value }))}
+                                                className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4 text-sm font-bold text-slate-800 outline-none transition focus:border-green-300 focus:bg-white"
+                                            >
+                                                <option value="">Seleccione una ciudad</option>
+                                                {(publicConfig.ciudades || DEFAULT_CITY_RULES).filter((city) => city.enabled !== false).map((city) => (
+                                                    <option key={city.value} value={city.value}>{city.label}</option>
+                                                ))}
+                                            </select>
+                                        </label>
+
+                                        {!lookupInfo?.found && (
+                                        <label className="md:col-span-1">
+                                            <span className="mb-2 block text-[11px] font-black uppercase tracking-[0.18em] text-slate-500">Nombre completo</span>
+                                            <input
+                                                value={preChatForm.nombre}
+                                                onChange={(e) => setPreChatForm((prev) => ({ ...prev, nombre: e.target.value }))}
+                                                placeholder="Paola Rodríguez"
+                                                className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4 text-sm font-bold text-slate-800 outline-none transition focus:border-green-300 focus:bg-white"
+                                            />
+                                        </label>
+                                        )}
+                                    </div>
+
+                                    {preChatError && (
+                                        <div className="mt-4 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-bold text-rose-700">
+                                            {preChatError}
+                                        </div>
+                                    )}
                                 </div>
 
-                                <div className="mt-8 grid gap-4 md:grid-cols-2">
-                                    <label className="md:col-span-2">
-                                        <span className="mb-2 block text-[11px] font-black uppercase tracking-[0.18em] text-slate-500">Tu correo electrónico</span>
-                                        <input
-                                            value={preChatForm.correo}
-                                            onChange={(e) => setPreChatForm((prev) => ({ ...prev, correo: e.target.value }))}
-                                            placeholder="tu@correo.com"
-                                            className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4 text-sm font-bold text-slate-800 outline-none transition focus:border-green-300 focus:bg-white"
-                                        />
-                                    </label>
-
-                                    {lookupLoading && (
-                                        <div className="md:col-span-2 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-bold text-slate-500">
-                                            Estoy revisando si ya te tengo registrado con ese correo...
-                                        </div>
-                                    )}
-
-                                    {lookupInfo?.found && (
-                                        <div className="md:col-span-2 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-4">
-                                            <p className="text-[10px] font-black uppercase tracking-[0.18em] text-emerald-700">Cliente reconocido</p>
-                                            <p className="mt-2 text-sm font-bold text-emerald-950">
-                                                Ya te reconocí. Puedes entrar de una y seguir con tu mercado.
-                                            </p>
-                                        </div>
-                                    )}
-
-                                    {lookupInfo && !lookupInfo.found && lookupEmail && (
-                                        <div className="md:col-span-2 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-800">
-                                            No te encontré todavía. Déjame tu nombre y ciudad y te registro en esta vuelta.
-                                        </div>
-                                    )}
-
-                                    <label className="md:col-span-1">
-                                        <span className="mb-2 block text-[11px] font-black uppercase tracking-[0.18em] text-slate-500">Ciudad</span>
-                                        <select
-                                            value={preChatForm.ciudad}
-                                            onChange={(e) => setPreChatForm((prev) => ({ ...prev, ciudad: e.target.value }))}
-                                            className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4 text-sm font-bold text-slate-800 outline-none transition focus:border-green-300 focus:bg-white"
-                                        >
-                                            <option value="">Seleccione una ciudad</option>
-                                            {(publicConfig.ciudades || DEFAULT_CITY_RULES).filter((city) => city.enabled !== false).map((city) => (
-                                                <option key={city.value} value={city.value}>{city.label}</option>
-                                            ))}
-                                        </select>
-                                    </label>
-
-                                    {!lookupInfo?.found && (
-                                    <label className="md:col-span-1">
-                                        <span className="mb-2 block text-[11px] font-black uppercase tracking-[0.18em] text-slate-500">Nombre completo</span>
-                                        <input
-                                            value={preChatForm.nombre}
-                                            onChange={(e) => setPreChatForm((prev) => ({ ...prev, nombre: e.target.value }))}
-                                            placeholder="Paola Rodríguez"
-                                            className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4 text-sm font-bold text-slate-800 outline-none transition focus:border-green-300 focus:bg-white"
-                                        />
-                                    </label>
-                                    )}
-                                </div>
-
-                                {preChatError && (
-                                    <div className="mt-4 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-bold text-rose-700">
-                                        {preChatError}
-                                    </div>
-                                )}
-
-                                <div className="app-modal-actions mt-6 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-                                    <p className="text-xs font-semibold text-slate-400">
+                                <div className="app-modal-actions flex shrink-0 flex-col gap-3 border-t border-slate-200 bg-white p-4 md:flex-row md:items-center md:justify-between md:p-6">
+                                    <p className="hidden text-xs font-semibold text-slate-400 md:block">
                                         {publicConfig.cobertura || "Solo entregamos en Bucaramanga, Floridablanca, Girón, Piedecuesta y Ruitoque."}
                                     </p>
-                                    <div className="flex flex-col gap-3 sm:flex-row">
+                                    <div className="flex flex-col gap-3 sm:flex-row md:ml-auto">
                                         <button
                                             type="button"
                                             onClick={openTrackingModal}

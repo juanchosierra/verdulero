@@ -53,14 +53,7 @@
   }
 
   .app-modal-actions {
-    position: sticky;
-    bottom: -1.5rem;
-    margin-right: -1.5rem;
-    margin-left: -1.5rem;
-    border-top: 1px solid rgb(226 232 240 / 0.85);
-    background: rgb(255 255 255 / 0.96);
-    padding: 1rem 1.5rem calc(1rem + env(safe-area-inset-bottom, 0px));
-    backdrop-filter: blur(16px);
+    padding-bottom: env(safe-area-inset-bottom, 0px);
   }
 
   @media (min-width: 768px) {
@@ -75,13 +68,7 @@
     }
 
     .app-modal-actions {
-      position: static;
-      margin-right: 0;
-      margin-left: 0;
-      border-top: 0;
-      background: transparent;
       padding: 0;
-      backdrop-filter: none;
     }
   }
 }
