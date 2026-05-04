@@ -1150,7 +1150,7 @@ export default function ChatPage() {
 
     const renderCartPanel = (isMobile = false) => (
         <div className="flex h-full flex-col overflow-hidden">
-            <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
+            <div className="flex items-center justify-between border-b border-gray-100 px-4 py-3">
                 <div>
                     <h2 className="text-sm font-black uppercase tracking-widest text-gray-700">Tu Canasta</h2>
                     <p className="mt-1 text-[11px] font-semibold text-gray-400">
@@ -1163,9 +1163,10 @@ export default function ChatPage() {
                         <button
                             type="button"
                             onClick={() => setMobileCartOpen(false)}
-                            className="flex h-10 w-10 items-center justify-center rounded-2xl border border-gray-200 bg-white text-gray-500"
+                            className="inline-flex items-center justify-center rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-[11px] font-black uppercase tracking-wide text-emerald-700"
                         >
-                            <X size={18} />
+                            <X size={15} />
+                            <span className="ml-1.5">Volver al chat</span>
                         </button>
                     )}
                 </div>
@@ -1859,7 +1860,7 @@ export default function ChatPage() {
                         initial={{ opacity: 0 }}
                         animate={{ opacity: 1 }}
                         exit={{ opacity: 0 }}
-                        className="app-safe-modal fixed inset-0 z-[95] bg-slate-950/35 lg:hidden"
+                        className="app-safe-modal fixed inset-0 z-[130] bg-slate-950/35 lg:hidden"
                     >
                         <motion.div
                             initial={{ opacity: 0, y: 24 }}
