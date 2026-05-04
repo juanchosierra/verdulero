@@ -1298,7 +1298,7 @@ export default function ChatPage() {
         <main className="app-safe-screen bg-[radial-gradient(circle_at_top,_rgba(34,197,94,0.08),_transparent_28%),linear-gradient(180deg,_#f8faf8_0%,_#f4f6f3_100%)]">
             <div className="app-safe-top sticky top-0 z-[100] border-b border-[#e6eadf] bg-white/95 backdrop-blur-xl shadow-[0_10px_40px_rgba(15,23,42,0.04)]">
                 <div className="mx-auto max-w-[1720px] px-3 md:px-5">
-                    <div className="flex flex-wrap items-center gap-2 py-3 lg:flex-nowrap lg:gap-3">
+                    <div className="flex flex-wrap items-center gap-2 py-1.5 md:py-3 lg:flex-nowrap lg:gap-3">
                         <div className="hidden min-w-0 lg:flex lg:items-center lg:gap-3">
                             <a
                                 href={publicConfig.siteUrl || "https://elverdulero.com.co"}
@@ -1317,7 +1317,7 @@ export default function ChatPage() {
                                 rel="noopener noreferrer"
                                 className="group inline-flex items-center justify-center gap-2"
                             >
-                                <div className="relative h-[64px] w-[240px] md:h-[78px] md:w-[320px]">
+                                <div className="relative h-[42px] w-[170px] md:h-[78px] md:w-[320px]">
                                     <Image
                                         src={publicConfig.logoUrl || "https://elverdulero.com.co/wp-content/uploads/2026/01/verdulerologo@4x-1400x389.png"}
                                         alt="El Verdulero"
@@ -1332,13 +1332,18 @@ export default function ChatPage() {
                             </a>
                         </div>
 
-                        <div className="flex items-center gap-2 whitespace-nowrap rounded-full border border-slate-200 bg-slate-50 px-4 py-2 text-[11px] font-black uppercase tracking-[0.14em] text-slate-600">
+                        <div className="hidden items-center gap-2 whitespace-nowrap rounded-full border border-slate-200 bg-slate-50 px-4 py-2 text-[11px] font-black uppercase tracking-[0.14em] text-slate-600 md:flex">
                             Pago contra entrega
                         </div>
-                        <div className="min-w-0 max-w-[420px] rounded-[1.2rem] border border-green-200 bg-green-50 px-4 py-2 text-[10px] font-black uppercase tracking-[0.12em] leading-tight text-green-700 sm:text-[11px]">
+                        <div className="hidden min-w-0 max-w-[420px] rounded-[1.2rem] border border-green-200 bg-green-50 px-4 py-2 text-[10px] font-black uppercase tracking-[0.12em] leading-tight text-green-700 sm:text-[11px] md:block">
                             <div className="line-clamp-2">{publicConfig.cobertura || "Cobertura Bucaramanga, Floridablanca, Girón, Piedecuesta y Ruitoque"}</div>
                         </div>
-                        <div className="ml-auto flex min-w-0 items-center justify-end gap-2">
+                        <div className="flex w-full items-center justify-center gap-2 rounded-full border border-lime-200 bg-lime-50 px-3 py-1 text-center text-[10px] font-black uppercase tracking-[0.12em] text-lime-800 md:hidden">
+                            <span>{deliverySchedule.fullDateLabel}</span>
+                            <span className="text-lime-500">·</span>
+                            <span>Canasta {formatMoney(cartTotal)}</span>
+                        </div>
+                        <div className="ml-auto hidden min-w-0 items-center justify-end gap-2 md:flex">
                             <div className="rounded-2xl border border-lime-200 bg-lime-50 px-4 py-3 text-center">
                                 <p className="text-[10px] font-black uppercase tracking-[0.18em] text-lime-700">Entrega</p>
                                 <p className="mt-1 whitespace-nowrap text-xs font-black text-lime-950">{deliverySchedule.fullDateLabel}</p>
@@ -1868,15 +1873,15 @@ export default function ChatPage() {
                 )}
             </AnimatePresence>
 
-            <div className="mx-auto max-w-[1720px] px-3 py-4 md:px-5">
+            <div className="mx-auto max-w-[1720px] px-2 py-2 md:px-5 md:py-4">
                 <div className="app-chat-height flex gap-4">
-                <section className="flex-1 min-w-0 flex flex-col bg-white border border-gray-100 shadow-premium rounded-3xl overflow-hidden font-sans relative">
+                <section className="flex-1 min-w-0 flex flex-col bg-white border border-gray-100 shadow-premium rounded-[1.4rem] md:rounded-3xl overflow-hidden font-sans relative">
                     <div className="absolute top-0 left-0 w-full h-40 bg-gradient-to-b from-primary/5 to-transparent pointer-events-none -z-10" />
 
-                    <header className="sticky top-0 z-50 flex flex-col gap-3 border-b border-gray-100 bg-white/90 px-4 py-3 backdrop-blur-xl sm:flex-row sm:items-start sm:justify-between sm:px-6 sm:py-4">
-                        <div className="group flex w-full min-w-0 items-start gap-3 sm:w-auto sm:gap-4">
+                    <header className="sticky top-0 z-50 flex items-center justify-between gap-2 border-b border-gray-100 bg-white/95 px-3 py-2 backdrop-blur-xl sm:px-6 sm:py-4">
+                        <div className="group flex min-w-0 items-center gap-2 sm:gap-4">
                             <div className="relative">
-                                <div className="w-12 h-12 relative bg-white rounded-2xl border border-gray-100 shadow-premium flex items-center justify-center overflow-hidden">
+                                <div className="relative flex h-9 w-9 items-center justify-center overflow-hidden rounded-xl border border-gray-100 bg-white shadow-premium sm:h-12 sm:w-12 sm:rounded-2xl">
                                     <Image
                                         src={publicConfig.logoUrl || "https://elverdulero.com.co/wp-content/uploads/2026/01/verdulerologo@4x-1400x389.png"}
                                         alt="El Verdulero"
@@ -1884,17 +1889,17 @@ export default function ChatPage() {
                                         className="object-contain p-2"
                                     />
                                 </div>
-                                <div className="absolute -bottom-1 -right-1 w-4 h-4 bg-green-500 border-4 border-white rounded-full shadow-sm shadow-green-500/50" />
+                                <div className="absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-white bg-green-500 shadow-sm shadow-green-500/50 sm:-bottom-1 sm:-right-1 sm:h-4 sm:w-4 sm:border-4" />
                             </div>
                             <div className="min-w-0">
-                                <div className="flex flex-col gap-2 lg:flex-row lg:items-center lg:gap-3">
+                                <div className="flex items-center gap-2 lg:gap-3">
                                     <div>
-                                        <h1 className="text-xl font-black text-gray-900 tracking-tight leading-none">El Verdulero</h1>
-                                        <p className="mt-1 flex items-center gap-1 text-[10px] font-black uppercase tracking-widest text-green-600">
-                                            <Sparkles size={10} /> Atendiendo ahora
+                                        <h1 className="truncate text-base font-black leading-none tracking-tight text-gray-900 sm:text-xl">El Verdulero</h1>
+                                        <p className="mt-0.5 flex items-center gap-1 text-[9px] font-black uppercase tracking-wider text-green-600 sm:mt-1 sm:text-[10px] sm:tracking-widest">
+                                            <Sparkles size={10} /> En línea
                                         </p>
                                     </div>
-                                    <div className="inline-flex max-w-full items-center gap-2 self-start rounded-2xl border border-green-200 bg-green-50 px-3 py-2">
+                                    <div className="hidden max-w-full items-center gap-2 self-start rounded-2xl border border-green-200 bg-green-50 px-3 py-2 sm:inline-flex">
                                         <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-white text-green-600 shadow-sm">
                                             <CheckCircle2 size={15} />
                                         </div>
@@ -1907,15 +1912,23 @@ export default function ChatPage() {
                                 </div>
                             </div>
                         </div>
-                        <div className="flex w-full shrink-0 items-center justify-between gap-2 sm:w-auto sm:justify-end">
+                        <div className="flex shrink-0 items-center justify-end gap-1.5 sm:gap-2">
+                            <a
+                                href={`https://wa.me/${(publicConfig.supportWhatsapp || "573176778089").replace(/\D/g, "")}?text=Hola%2C%20necesito%20ayuda%20con%20mi%20pedido`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="inline-flex items-center justify-center rounded-xl border border-green-200 bg-green-50 px-2.5 py-2 text-[10px] font-black uppercase tracking-wide text-green-700 transition-colors hover:bg-green-100 sm:px-3 sm:text-[11px]"
+                            >
+                                Agente
+                            </a>
                             <button
                                 type="button"
                                 onClick={() => setMobileCartOpen(true)}
-                                className="flex-1 rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-[11px] font-black uppercase tracking-wide text-gray-700 transition hover:bg-gray-100 sm:flex-none lg:hidden"
+                                className="rounded-xl border border-gray-200 bg-gray-50 px-2.5 py-2 text-[10px] font-black uppercase tracking-wide text-gray-700 transition hover:bg-gray-100 sm:px-3 sm:text-[11px] lg:hidden"
                             >
-                                Canasta
+                                {cartItems.length ? formatMoney(cartTotal) : "Canasta"}
                             </button>
-                            <button className="w-10 h-10 relative flex items-center justify-center text-gray-400 hover:text-gray-900 hover:bg-gray-50 rounded-xl transition-all duration-300">
+                            <button className="relative hidden h-10 w-10 items-center justify-center rounded-xl text-gray-400 transition-all duration-300 hover:bg-gray-50 hover:text-gray-900 sm:flex">
                                 <ShoppingBasket size={22} />
                                 {cartItems.length > 0 && (
                                     <span className="absolute -top-1 -right-1 text-[10px] bg-primary text-white w-5 h-5 rounded-full flex items-center justify-center font-bold">
@@ -1926,7 +1939,7 @@ export default function ChatPage() {
                         </div>
                     </header>
 
-                    <div className="flex-1 overflow-y-auto px-6 py-6 space-y-8">
+                    <div className="flex-1 space-y-4 overflow-y-auto px-3 py-3 sm:space-y-8 sm:px-6 sm:py-6">
                         <AnimatePresence>
                             {messages.map((m, i) => (
                                 m.hidden ? null : (
@@ -1945,7 +1958,7 @@ export default function ChatPage() {
                                         {m.role === "user" && <div className="p-1 bg-gray-100 rounded px-1.5"><User size={10} className="text-gray-500" /></div>}
                                     </div>
                                     <div className={cn(
-                                        "p-5 rounded-[2rem] text-sm font-medium leading-relaxed shadow-sm max-w-[85%]",
+                                        "max-w-[92%] rounded-[1.35rem] p-3 text-sm font-medium leading-relaxed shadow-sm sm:max-w-[85%] sm:rounded-[2rem] sm:p-5",
                                         m.role === "assistant"
                                             ? "bg-white border border-gray-100 text-gray-800 rounded-tl-none"
                                             : "bg-primary text-white rounded-tr-none shadow-lg shadow-primary/20"
@@ -2007,9 +2020,9 @@ export default function ChatPage() {
                         <div ref={messagesEndRef} />
                     </div>
 
-                    <div className="app-chat-composer sticky bottom-0 z-50 border-t border-gray-50 bg-white/90 px-4 pt-3 backdrop-blur-xl sm:px-6 sm:pt-4">
+                    <div className="app-chat-composer sticky bottom-0 z-50 border-t border-gray-100 bg-white/95 px-3 pt-2 backdrop-blur-xl sm:px-6 sm:pt-4">
                         {cartItems.length > 0 && (
-                            <div className="mb-4 flex items-center justify-between gap-3 rounded-2xl border border-green-100 bg-green-50 px-4 py-3 lg:hidden">
+                            <div className="mb-4 hidden items-center justify-between gap-3 rounded-2xl border border-green-100 bg-green-50 px-4 py-3 lg:hidden">
                                 <div>
                                     <p className="text-[10px] font-black uppercase tracking-widest text-green-700">Tu canasta</p>
                                     <p className="mt-1 text-sm font-black text-green-950">{cartItems.length} productos · {formatMoney(cartTotal)}</p>
@@ -2042,7 +2055,7 @@ export default function ChatPage() {
                             </div>
                         )}
                         {cartItems.length > 0 && (
-                            <div className="mb-4 rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
+                            <div className="mb-4 hidden rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm md:block">
                                 <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
                                     <div className="min-w-0">
                                         <p className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-500">Estado del pedido</p>
@@ -2080,54 +2093,30 @@ export default function ChatPage() {
                                 </div>
                             </div>
                         )}
-                        <form onSubmit={handleSubmit} className="flex gap-2 relative group">
+                        <form onSubmit={handleSubmit} className="relative flex gap-2 group">
                             <input
                                 ref={inputRef}
                                 value={input}
                                 onChange={(e) => setInput(e.target.value)}
                                 placeholder="¿Qué te vamos a poner en la canasta?"
-                                className="flex-1 bg-gray-50/80 border border-gray-100/50 px-6 py-4 rounded-3xl text-sm font-semibold outline-none focus:bg-white focus:border-primary/30 focus:shadow-premium transition-all duration-300 placeholder:text-gray-400"
+                                className="flex-1 rounded-2xl border border-gray-100/70 bg-gray-50/80 px-4 py-3 text-sm font-semibold outline-none transition-all duration-300 placeholder:text-gray-400 focus:border-primary/30 focus:bg-white focus:shadow-premium sm:rounded-3xl sm:px-6 sm:py-4"
                             />
                             <button
                                 type="submit"
                                 disabled={isLoading || !input.trim()}
-                                className="bg-primary text-white p-4 rounded-3xl shadow-xl shadow-primary/30 disabled:opacity-30 transition-all"
+                                className="rounded-2xl bg-primary p-3 text-white shadow-xl shadow-primary/30 transition-all disabled:opacity-30 sm:rounded-3xl sm:p-4"
                             >
                                 {isLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : <Send className="w-5 h-5" />}
                             </button>
                         </form>
-                        <div className="mt-5 rounded-2xl border border-gray-100 bg-gray-50/70 px-4 py-3">
-                            <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-                                <div className="flex flex-wrap items-center justify-center gap-x-5 gap-y-2 md:justify-start">
-                                    <div className="flex items-center gap-1.5">
-                                        <CheckCircle2 size={12} className="text-primary" />
-                                        <span className="text-[10px] font-black uppercase tracking-widest text-gray-400">Pago contra entrega</span>
-                                    </div>
-                                    <div className="flex items-center gap-1.5">
-                                        <Sparkles size={12} className="text-accent-500" />
-                                        <span className="text-[10px] font-black uppercase tracking-widest text-gray-400">Calidad garantizada</span>
-                                    </div>
-                                </div>
-                                <a
-                                    href={`https://wa.me/${(publicConfig.supportWhatsapp || "573176778089").replace(/\D/g, "")}?text=Hola%2C%20necesito%20ayuda%20con%20mi%20pedido`}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl border border-green-200 bg-green-50 text-green-700 text-[11px] font-black uppercase tracking-wide hover:bg-green-100 transition-colors whitespace-nowrap"
-                                >
-                                    ¿Tienes problemas? Hablar con un agente
-                                </a>
-                            </div>
-                            <div className="mt-3 border-t border-gray-100 pt-3 text-center">
-                                <a
-                                    href="https://cuantium.com"
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="text-[11px] font-semibold text-gray-400 transition hover:text-emerald-700"
-                                >
-                                    Desarrollado por Cuantium - Wibi™
-                                </a>
-                            </div>
-                        </div>
+                        <a
+                            href="https://cuantium.com"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="mt-1.5 block text-center text-[8px] font-semibold leading-none text-gray-300 transition hover:text-emerald-700 sm:mt-2 sm:text-[10px]"
+                        >
+                            Desarrollado por Cuantium - Wibi™
+                        </a>
                     </div>
                 </section>
 
