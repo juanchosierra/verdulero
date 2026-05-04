@@ -128,7 +128,28 @@ function isValidEmail(value: string) {
     return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim());
 }
 
-function renderAssistantMessage(content: string) {
+function isClickableAssistantOption(content: string, line: string) {
+    if (!line.startsWith("- ")) return false;
+    const normalized = content
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .toLowerCase();
+
+    return (
+        /opciones reales|estas opciones|cual le doy|cual le anoto|le sirve alguna|necesito que me diga cual/.test(normalized) &&
+        !/tirilla de compra|resumen final|total a pagar|fecha de entrega/.test(normalized)
+    );
+}
+
+function optionReplyFromLine(line: string) {
+    return line
+        .replace(/^-\s*/, "")
+        .replace(/\s+-\s+\$[\d.,]+.*$/i, "")
+        .replace(/\s+\(\s*(kg|kilo|kilos|lb|libra|libras|und|unidad|unidades|atado|bandeja|lts?|litros?)\s*\)\s*$/i, "")
+        .trim();
+}
+
+function renderAssistantMessage(content: string, onOptionClick?: (option: string) => void, optionsDisabled = false) {
     const lines = content
         .split("\n")
         .map((line) => line.trim())
@@ -202,6 +223,23 @@ function renderAssistantMessage(content: string) {
                 }
 
                 if (line.startsWith("- ")) {
+                    if (onOptionClick && isClickableAssistantOption(content, line)) {
+                        const optionReply = optionReplyFromLine(line);
+
+                        return (
+                            <button
+                                key={idx}
+                                type="button"
+                                onClick={() => onOptionClick(optionReply)}
+                                disabled={optionsDisabled}
+                                className="flex w-full items-start gap-2 rounded-2xl border border-emerald-100 bg-emerald-50/70 px-3 py-2 text-left text-slate-800 transition hover:border-emerald-300 hover:bg-emerald-50 disabled:cursor-not-allowed disabled:opacity-60"
+                            >
+                                <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-emerald-500" />
+                                <span className="leading-relaxed">{line.slice(2)}</span>
+                            </button>
+                        );
+                    }
+
                     return (
                         <div key={idx} className="flex items-start gap-2 pl-0.5">
                             <span className="mt-2 h-1.5 w-1.5 rounded-full bg-slate-300 shrink-0" />
@@ -812,7 +850,7 @@ export default function ChatPage() {
         await sendUserMessage(input.trim());
     };
 
-    const sendQuickReply = async (reply: "sí" | "no") => {
+    const sendQuickReply = async (reply: string) => {
         if (isLoading) return;
         await sendUserMessage(reply);
     };
@@ -1966,7 +2004,7 @@ export default function ChatPage() {
                                             ? "bg-white border border-gray-100 text-gray-800 rounded-tl-none"
                                             : "bg-primary text-white rounded-tr-none shadow-lg shadow-primary/20"
                                     )}>
-                                        {m.role === "assistant" ? renderAssistantMessage(m.content) : <p className="whitespace-pre-line">{m.content}</p>}
+                                        {m.role === "assistant" ? renderAssistantMessage(m.content, sendQuickReply, isLoading) : <p className="whitespace-pre-line">{m.content}</p>}
                                     </div>
                                     {m.role === "assistant" && shouldShowCheckoutDecisionButtons(m.content) && (
                                         <div className="mt-3 flex w-full max-w-[85%] justify-start gap-2">
