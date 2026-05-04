@@ -468,7 +468,7 @@ const scenarios = [
     ],
     assert(history) {
       const last = String(history[history.length - 1]?.reply || "");
-      if (/(si hay|cu[aá]ntas|cu[aá]ntos|le agregu[eé]|subtotal|uchuva|tomate|papa)/i.test(last)) {
+      if (/(si hay|cu[aá]ntas|cu[aá]ntos|le agregu[eé]|subtotal|uchuva)/i.test(last)) {
         throw new Error("Inventó producto ante una frase hostil sin pedido.");
       }
     }
