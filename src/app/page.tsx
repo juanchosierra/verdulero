@@ -34,6 +34,7 @@ type Product = {
 };
 
 const FEATURED_PRODUCT_SEARCH = "colemon";
+const ERROR_REPORTING_UI_ENABLED = false;
 
 type PreChatForm = {
     correo: string;
@@ -944,6 +945,7 @@ export default function ChatPage() {
     };
 
     const openErrorReportModal = (message: Message, index: number) => {
+        if (!ERROR_REPORTING_UI_ENABLED) return;
         const key = `${index}-${message.role}-${message.content}`;
         if (reportedKeys[key]) return;
         setErrorDescription("");
@@ -1417,7 +1419,7 @@ export default function ChatPage() {
             </AnimatePresence>
 
             <AnimatePresence>
-                {pendingErrorReport && (
+                {ERROR_REPORTING_UI_ENABLED && pendingErrorReport && (
                     <motion.div
                         initial={{ opacity: 0 }}
                         animate={{ opacity: 1 }}
@@ -1986,23 +1988,25 @@ export default function ChatPage() {
                                             </button>
                                         </div>
                                     )}
-                                    <div className={cn("mt-1 flex w-full max-w-[85%]", m.role === "user" ? "justify-end" : "justify-start")}>
-                                        <button
-                                            type="button"
-                                            onClick={() => openErrorReportModal(m, i)}
-                                            disabled={!!reportedKeys[`${i}-${m.role}-${m.content}`] || reportingKey === `${i}-${m.role}-${m.content}`}
-                                            className={cn(
-                                                "inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-[9px] font-black uppercase tracking-[0.12em] transition-colors",
-                                                reportedKeys[`${i}-${m.role}-${m.content}`]
-                                                    ? "border-amber-200 bg-amber-50 text-amber-700"
-                                                    : "border-rose-200 bg-white/80 text-rose-600 hover:bg-rose-50",
-                                                reportingKey === `${i}-${m.role}-${m.content}` && "opacity-60"
-                                            )}
-                                        >
-                                            <ShieldAlert size={11} />
-                                            {reportedKeys[`${i}-${m.role}-${m.content}`] ? "Error reportado" : "Reportar error"}
-                                        </button>
-                                    </div>
+                                    {ERROR_REPORTING_UI_ENABLED && (
+                                        <div className={cn("mt-1 flex w-full max-w-[85%]", m.role === "user" ? "justify-end" : "justify-start")}>
+                                            <button
+                                                type="button"
+                                                onClick={() => openErrorReportModal(m, i)}
+                                                disabled={!!reportedKeys[`${i}-${m.role}-${m.content}`] || reportingKey === `${i}-${m.role}-${m.content}`}
+                                                className={cn(
+                                                    "inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-[9px] font-black uppercase tracking-[0.12em] transition-colors",
+                                                    reportedKeys[`${i}-${m.role}-${m.content}`]
+                                                        ? "border-amber-200 bg-amber-50 text-amber-700"
+                                                        : "border-rose-200 bg-white/80 text-rose-600 hover:bg-rose-50",
+                                                    reportingKey === `${i}-${m.role}-${m.content}` && "opacity-60"
+                                                )}
+                                            >
+                                                <ShieldAlert size={11} />
+                                                {reportedKeys[`${i}-${m.role}-${m.content}`] ? "Error reportado" : "Reportar error"}
+                                            </button>
+                                        </div>
+                                    )}
                                 </motion.div>
                                 )
                             ))}
