@@ -942,7 +942,7 @@ function pickBestProduct<T extends { name: string; id?: number | string }>(produ
 function cleanSearchTerm(raw: string) {
     return raw
         .toLowerCase()
-        .replace(/\b(por favor|porfa|gracias|porfis|quiero|me regalas|deme|dame|necesito|ponme|pongame|póngame|agregame|agrégame|agrega|agregue|anotame|anótame|anota)\b/g, " ")
+        .replace(/\b(por favor|porfa|gracias|porfis|please|quiero|me regalas|deme|dame|give me|necesito|ponme|pongame|póngame|agregame|agrégame|agrega|agregue|anotame|anótame|anota)\b/g, " ")
         .replace(/[^a-z0-9áéíóúñü\s]/gi, " ")
         .replace(/\s+/g, " ")
         .trim();
@@ -1055,7 +1055,7 @@ function stripLeadingQuantityPhrase(raw: string) {
 
 function cleanOrderText(raw: string) {
     return stripDiacritics(raw.toLowerCase())
-        .replace(/\b(por favor|porfa|gracias|porfis|quiero|me regalas|deme|dame|necesito|ponme|pongame|póngame|agregame|agrégame|agrega|agregue|anotame|anótame|anota)\b/g, " ")
+        .replace(/\b(por favor|porfa|gracias|porfis|please|quiero|me regalas|deme|dame|give me|necesito|ponme|pongame|póngame|agregame|agrégame|agrega|agregue|anotame|anótame|anota)\b/g, " ")
         .replace(/[^a-z0-9áéíóúñü\s.,]/gi, " ")
         .replace(/\s+/g, " ")
         .trim();
@@ -3006,7 +3006,7 @@ function correctCommonProductTypos(raw: string) {
 
 function normalizeRequestedProductTerm(raw: string) {
     const base = correctCommonProductTypos(stripLeadingConversationFillers(raw));
-    const tokens = tokenizeForMatch(base).filter((token) => !["del", "al", "tien", "tiene", "tienes"].includes(token));
+    const tokens = tokenizeForMatch(base).filter((token) => !["del", "al", "tien", "tiene", "tienes", "please", "give"].includes(token));
     if (tokens.length === 0) return cleanSearchTerm(base);
 
     return tokens

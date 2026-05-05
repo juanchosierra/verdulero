@@ -751,6 +751,24 @@ const scenarios = [
         throw new Error("Mostró ruido HTML como producto faltante.");
       }
     }
+  },
+  {
+    id: "R044",
+    name: "spanglish_simple_please",
+    bootstrapProfile: {
+      correo: "$EMAIL",
+      ciudad: "$CITY",
+      nombre: "English Mix"
+    },
+    steps: [
+      ["give me 2 libras de zanahoria please", [/(zanahoria|subtotal|agregu[eé]|qu[eé] m[aá]s necesita)/i]]
+    ],
+    assert(history) {
+      const last = String(history[history.length - 1]?.reply || "");
+      if (/please|give me|no encontr[eé]/i.test(last)) {
+        throw new Error("No limpió el Spanglish simple del pedido.");
+      }
+    }
   }
 ];
 
