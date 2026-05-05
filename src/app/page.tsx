@@ -377,6 +377,7 @@ export default function ChatPage() {
     const [checkoutOpen, setCheckoutOpen] = useState(false);
     const [checkoutSubmitting, setCheckoutSubmitting] = useState(false);
     const [checkoutError, setCheckoutError] = useState("");
+    const [dataPolicyAccepted, setDataPolicyAccepted] = useState(false);
     const [clockTick, setClockTick] = useState(0);
     const [reportingKey, setReportingKey] = useState<string | null>(null);
     const [reportedKeys, setReportedKeys] = useState<Record<string, boolean>>({});
@@ -906,6 +907,11 @@ export default function ChatPage() {
             return;
         }
 
+        if (!dataPolicyAccepted) {
+            setCheckoutError("Para confirmar el pedido debes aceptar el uso de tus datos según Habeas Data.");
+            return;
+        }
+
         setCheckoutSubmitting(true);
         setCheckoutError("");
 
@@ -965,6 +971,7 @@ export default function ChatPage() {
             return;
         }
         setCheckoutError("");
+        setDataPolicyAccepted(false);
         setCheckoutOpen(true);
     };
 
@@ -1627,6 +1634,21 @@ export default function ChatPage() {
                                             placeholder="Calle 45 # 12-34, apto 201, barrio..."
                                             className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4 text-sm font-bold text-slate-800 outline-none transition focus:border-green-300 focus:bg-white"
                                         />
+                                    </label>
+
+                                    <label className="md:col-span-2 flex items-start gap-3 rounded-2xl border border-emerald-100 bg-emerald-50/70 px-4 py-3">
+                                        <input
+                                            type="checkbox"
+                                            checked={dataPolicyAccepted}
+                                            onChange={(e) => {
+                                                setDataPolicyAccepted(e.target.checked);
+                                                if (e.target.checked) setCheckoutError("");
+                                            }}
+                                            className="mt-1 h-5 w-5 shrink-0 rounded border-emerald-300 text-emerald-600 accent-emerald-600"
+                                        />
+                                        <span className="text-xs font-bold leading-relaxed text-emerald-950">
+                                            Al confirmar el pedido, acepto el uso de mis datos según la Ley de Habeas Data de la República de Colombia.
+                                        </span>
                                     </label>
                                 </div>
 
