@@ -3,6 +3,14 @@ import { join } from "node:path";
 
 const BASE_URL = process.env.BASE_URL || "https://verdulero.vercel.app/api/chat";
 const NOW = new Date().toISOString();
+const REQUEST_DELAY_MS = Number(
+  process.env.CHAT_REGRESSION_DELAY_MS || (BASE_URL.includes("verdulero.vercel.app") ? "1200" : "0")
+);
+const RATE_LIMIT_RETRIES = Number(process.env.CHAT_REGRESSION_429_RETRIES || "3");
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
 
 function sessionId(name) {
   const safe = name.toLowerCase().replace(/[^a-z0-9]+/g, "_");
@@ -28,22 +36,33 @@ async function send(session, payload) {
         ...payload
       };
 
-  const res = await fetch(BASE_URL, {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify(body)
-  });
+  for (let attempt = 0; attempt <= RATE_LIMIT_RETRIES; attempt += 1) {
+    if (REQUEST_DELAY_MS > 0) await sleep(REQUEST_DELAY_MS);
 
-  if (!res.ok) {
-    const txt = await res.text();
-    throw new Error(`HTTP ${res.status}: ${txt}`);
+    const res = await fetch(BASE_URL, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(body)
+    });
+
+    if (res.status === 429 && attempt < RATE_LIMIT_RETRIES) {
+      await sleep(Math.max(3000, REQUEST_DELAY_MS) * (attempt + 1));
+      continue;
+    }
+
+    if (!res.ok) {
+      const txt = await res.text();
+      throw new Error(`HTTP ${res.status}: ${txt}`);
+    }
+
+    const json = await res.json();
+    return {
+      reply: String(json?.content || ""),
+      contract: json?.contract || null
+    };
   }
 
-  const json = await res.json();
-  return {
-    reply: String(json?.content || ""),
-    contract: json?.contract || null
-  };
+  throw new Error("No se pudo enviar el mensaje después de reintentos por rate limit.");
 }
 
 function includesAny(text, patterns) {
