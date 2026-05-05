@@ -2138,14 +2138,16 @@ export default function ChatPage() {
                                         </p>
                                     )}
                                 </div>
-                                <button
-                                    type="button"
-                                    onClick={minimumMet ? handleCheckoutClick : () => setMobileCartOpen(true)}
-                                    disabled={isLoading}
-                                    className="shrink-0 rounded-2xl bg-green-600 px-4 py-3 text-[11px] font-black uppercase tracking-wide text-white disabled:opacity-60"
-                                >
-                                    {minimumMet ? "Finalizar" : "Ver"}
-                                </button>
+                                {!minimumMet && (
+                                    <button
+                                        type="button"
+                                        onClick={() => setMobileCartOpen(true)}
+                                        disabled={isLoading}
+                                        className="shrink-0 rounded-2xl bg-green-600 px-4 py-3 text-[11px] font-black uppercase tracking-wide text-white disabled:opacity-60"
+                                    >
+                                        Ver
+                                    </button>
+                                )}
                             </div>
                         )}
                         {cartItems.length > 0 && (
