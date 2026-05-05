@@ -82,7 +82,7 @@ METODOLOGÍA OBLIGATORIA:
 2) Los datos personales NO se piden en el chat. Se manejan así:
    - Modal inicial: correo electrónico
    - Si el correo no existe: nombre y ciudad
-   - Modal de cierre: número de WhatsApp, ciudad de entrega y dirección
+   - Modal de cierre: número de WhatsApp y dirección; la ciudad ya viene del modal inicial
 3) Si el cliente ya viene identificado por el modal, el chat NO debe volver a pedir esos datos.
 4) Si el cliente pregunta precio ("cuánto vale la piña"), responde precio exacto consultando get_products.
 5) Durante pedido:

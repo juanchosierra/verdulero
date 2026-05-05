@@ -890,13 +890,14 @@ export default function ChatPage() {
         if (!sessionId || isLoading || cartItems.length === 0) return;
 
         const phone = checkoutForm.telefono.replace(/\D/g, "");
+        const checkoutCity = normalizeCityValue(preChatForm.ciudad || checkoutForm.ciudad);
         if (phone.length !== 10 || !phone.startsWith("3")) {
             setCheckoutError("Déjame tu número de WhatsApp válido de 10 dígitos.");
             return;
         }
 
-        if (!checkoutForm.ciudad) {
-            setCheckoutError("Selecciona la ciudad de entrega.");
+        if (!checkoutCity) {
+            setCheckoutError("Primero necesitamos la ciudad del inicio para confirmar el pedido.");
             return;
         }
 
@@ -926,7 +927,7 @@ export default function ChatPage() {
                     customerName: preChatForm.nombre || lookupInfo?.customer?.firstName || "Visitante Web",
                     checkoutProfile: {
                         telefono: phone,
-                        ciudad: checkoutForm.ciudad,
+                        ciudad: checkoutCity,
                         direccion: checkoutForm.direccion.trim()
                     }
                 })
@@ -952,6 +953,10 @@ export default function ChatPage() {
     const handleCheckoutClick = async () => {
         if (!preChatReady) {
             setPreChatError("Primero completa tus datos para poder confirmar el pedido.");
+            return;
+        }
+        if (!preChatForm.ciudad) {
+            setPreChatError("Primero selecciona tu ciudad en el inicio del pedido.");
             return;
         }
         if (cartItems.length === 0 || isLoading) return;
@@ -1586,8 +1591,13 @@ export default function ChatPage() {
                                                 Completa tus datos de entrega y confirmamos.
                                             </h2>
                                             <p className="mt-3 text-sm font-semibold leading-relaxed text-slate-500">
-                                                Aquí sí te pido tu número de WhatsApp y tu dirección. El chat ya no te los va a volver a preguntar.
+                                                Aquí sí te pido tu número de WhatsApp y tu dirección. La ciudad ya quedó guardada al inicio.
                                             </p>
+                                            {selectedCityLabel && (
+                                                <p className="mt-3 inline-flex rounded-2xl border border-emerald-100 bg-emerald-50 px-3 py-2 text-xs font-black uppercase tracking-[0.12em] text-emerald-800">
+                                                    Ciudad: {selectedCityLabel}
+                                                </p>
+                                            )}
                                         </div>
                                         <button
                                             type="button"
@@ -1607,20 +1617,6 @@ export default function ChatPage() {
                                             placeholder="3114479821"
                                             className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4 text-sm font-bold text-slate-800 outline-none transition focus:border-green-300 focus:bg-white"
                                         />
-                                    </label>
-
-                                    <label>
-                                        <span className="mb-2 block text-[11px] font-black uppercase tracking-[0.18em] text-slate-500">Ciudad</span>
-                                        <select
-                                            value={checkoutForm.ciudad}
-                                            onChange={(e) => setCheckoutForm((prev) => ({ ...prev, ciudad: e.target.value }))}
-                                            className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4 text-sm font-bold text-slate-800 outline-none transition focus:border-green-300 focus:bg-white"
-                                        >
-                                            <option value="">Seleccione una ciudad</option>
-                                            {(publicConfig.ciudades || DEFAULT_CITY_RULES).filter((city) => city.enabled !== false).map((city) => (
-                                                <option key={city.value} value={city.value}>{city.label}</option>
-                                            ))}
-                                        </select>
                                     </label>
 
                                     <label className="md:col-span-2">
