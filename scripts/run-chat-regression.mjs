@@ -604,6 +604,96 @@ const scenarios = [
         throw new Error("'cuanto va' se interpretó como búsqueda en vez de carrito.");
       }
     }
+  },
+  {
+    id: "R035",
+    name: "bootstrap_nombre_con_apellido_producto",
+    bootstrapProfile: {
+      correo: "$EMAIL",
+      ciudad: "$CITY",
+      nombre: "Felipe Mora"
+    },
+    steps: [
+      ["dame 1 libra de zanahoria", [/(zanahoria|subtotal|agregu[eé]|qu[eé] m[aá]s necesita)/i]]
+    ]
+  },
+  {
+    id: "R036",
+    name: "contexto_chonto_no_tomate_arbol",
+    bootstrapProfile: {
+      correo: "$EMAIL",
+      ciudad: "$CITY",
+      nombre: "Mateo Ruiz"
+    },
+    steps: [
+      ["tienes tomate?", [/(tomate|opciones reales|chonto)/i]],
+      ["dame 2 libras del chonto", [/(tomate chonto|unidad|unidades|no en lb|se maneja en)/i]]
+    ],
+    assert(history) {
+      const last = String(history[history.length - 1]?.reply || "");
+      if (/tomate de arbol|tomate de árbol|le agregu[eé].*tomate/i.test(last)) {
+        throw new Error("Resolvió 'del chonto' como otro tomate o lo agregó con unidad incorrecta.");
+      }
+    }
+  },
+  {
+    id: "R037",
+    name: "cambiar_producto_por_otro",
+    bootstrapProfile: {
+      correo: "$EMAIL",
+      ciudad: "$CITY",
+      nombre: "Sara Lopez"
+    },
+    steps: [
+      ["agrega 2 libras de zanahoria", [/(zanahoria|subtotal|agregu[eé])/i]],
+      ["mejor cambia zanahoria por papa pastusa lavada", [/(cambi[eé]|papa pastusa lavada|zanahoria)/i]]
+    ]
+  },
+  {
+    id: "R038",
+    name: "otra_libra_suma_producto",
+    bootstrapProfile: {
+      correo: "$EMAIL",
+      ciudad: "$CITY",
+      nombre: "Andres Arias"
+    },
+    steps: [
+      ["1 libra de zanahoria", [/(zanahoria|subtotal|agregu[eé])/i]],
+      ["otra libra de zanahoria", [/(zanahoria|subtotal|agregu[eé]|ya lo tengo)/i]],
+      ["cuanto va", [/(2\\s*lb|zanahoria|total|tirilla)/i]]
+    ]
+  },
+  {
+    id: "R039",
+    name: "reabre_cierre_para_agregar",
+    bootstrapProfile: {
+      correo: "$EMAIL",
+      ciudad: "$CITY",
+      nombre: "Marta Cano"
+    },
+    steps: [
+      ["1 libra de zanahoria", [/(zanahoria|subtotal|agregu[eé])/i]],
+      ["nada mas", [/(tirilla|total|confirmar|whatsapp|direcci[oó]n)/i]],
+      ["no, agregue 2 limones criollos", [/(lim[oó]n criollo|subtotal|agregu[eé]|qu[eé] m[aá]s necesita)/i]]
+    ],
+    assert(history) {
+      const last = String(history[history.length - 1]?.reply || "");
+      if (/para confirmar tu pedido|pedido confirmado|orden es #/i.test(last)) {
+        throw new Error("Se quedó pegado al cierre en vez de reabrir el pedido.");
+      }
+    }
+  },
+  {
+    id: "R040",
+    name: "frustracion_con_pedido_real",
+    bootstrapProfile: {
+      correo: "$EMAIL",
+      ciudad: "$CITY",
+      nombre: "Ivan Perez"
+    },
+    steps: [
+      ["no joda agregame bien 2 libras de papa criolla", [/(papa criolla|subtotal|agregu[eé]|qu[eé] m[aá]s necesita)/i]]
+    ]
   }
 ];
 

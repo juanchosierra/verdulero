@@ -49,6 +49,7 @@ const PRODUCT_SEARCH_ALIASES: Record<string, string[]> = {
   peregil: ["perejil", "perejil liso completo"],
   perejil_liso: ["perejil liso completo"],
   tomte: ["tomate"],
+  chonto: ["tomate chonto"],
   tomate_chont: ["tomate chonto"],
   tomate_larga_vida: ["tomate chonto"],
   tomate_milano: ["tomate chonto"],

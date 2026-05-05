@@ -942,7 +942,7 @@ function pickBestProduct<T extends { name: string; id?: number | string }>(produ
 function cleanSearchTerm(raw: string) {
     return raw
         .toLowerCase()
-        .replace(/\b(por favor|porfa|gracias|porfis|quiero|me regalas|deme|dame|necesito|ponme|pongame|póngame|agregame|agrégame|agrega|anotame|anótame|anota)\b/g, " ")
+        .replace(/\b(por favor|porfa|gracias|porfis|quiero|me regalas|deme|dame|necesito|ponme|pongame|póngame|agregame|agrégame|agrega|agregue|anotame|anótame|anota)\b/g, " ")
         .replace(/[^a-z0-9áéíóúñü\s]/gi, " ")
         .replace(/\s+/g, " ")
         .trim();
@@ -993,9 +993,11 @@ function normalizeQuantityWords(raw: string) {
         noventa: "90",
         cien: "100",
         medio: "0.5",
-        media: "0.5"
+        media: "0.5",
+        otro: "1",
+        otra: "1"
     };
-    let normalized = base.replace(/\b(un|una|uno|dos|tres|cuatro|cinco|seis|siete|ocho|nueve|diez|once|doce|trece|catorce|quince|dieciseis|diecisiete|dieciocho|diecinueve|veinte|veintiun|veintiuno|veintiuna|veintidos|veintitres|veinticuatro|veinticinco|veintiseis|veintisiete|veintiocho|veintinueve|treinta|cuarenta|cincuenta|sesenta|setenta|ochenta|noventa|cien|medio|media)\b/g, (m) => map[m] || m);
+    let normalized = base.replace(/\b(un|una|uno|dos|tres|cuatro|cinco|seis|siete|ocho|nueve|diez|once|doce|trece|catorce|quince|dieciseis|diecisiete|dieciocho|diecinueve|veinte|veintiun|veintiuno|veintiuna|veintidos|veintitres|veinticuatro|veinticinco|veintiseis|veintisiete|veintiocho|veintinueve|treinta|cuarenta|cincuenta|sesenta|setenta|ochenta|noventa|cien|medio|media|otro|otra)\b/g, (m) => map[m] || m);
     normalized = normalized.replace(
         /\b(30|40|50|60|70|80|90)\s+y\s+(1|2|3|4|5|6|7|8|9)\b/g,
         (_, tens: string, ones: string) => String(Number(tens) + Number(ones))
@@ -1053,7 +1055,7 @@ function stripLeadingQuantityPhrase(raw: string) {
 
 function cleanOrderText(raw: string) {
     return stripDiacritics(raw.toLowerCase())
-        .replace(/\b(por favor|porfa|gracias|porfis|quiero|me regalas|deme|dame|necesito|ponme|pongame|póngame|agregame|agrégame|agrega|anotame|anótame|anota)\b/g, " ")
+        .replace(/\b(por favor|porfa|gracias|porfis|quiero|me regalas|deme|dame|necesito|ponme|pongame|póngame|agregame|agrégame|agrega|agregue|anotame|anótame|anota)\b/g, " ")
         .replace(/[^a-z0-9áéíóúñü\s.,]/gi, " ")
         .replace(/\s+/g, " ")
         .trim();
@@ -1147,9 +1149,6 @@ function sanitizeBootstrapName(text: string): string | null {
     if (/(hola|buenas|buenos dias|buenas tardes|buenas noches)/i.test(value)) return null;
     if (/^(cliente web|visitante web)$/i.test(value)) return null;
     if (/(otra vez|eche|repite|repita|pedido|canasta|correo|whatsapp|telefono|n[uú]mero|monda|joda|carajos|uno nuevo|una nueva|nuevo mercado|mercado nuevo)/i.test(value)) return null;
-    if (looksLikeCatalogProductText(value)) return null;
-    if (looksLikeVariantSelectionText(value)) return null;
-
     return value;
 }
 
@@ -1608,9 +1607,9 @@ function parseOrderIntent(message: string): { quantity: number | null; product: 
         }
     }
 
-    const verbDriven = normalizedRaw.match(/^(quiero|necesito|me regalas|deme|dame|ponme|pongame|póngame|agregame|agrégame|agrega|anotame|anótame|anota)\s+(.+)$/i);
+    const verbDriven = normalizedRaw.match(/^(quiero|necesito|me regalas|deme|dame|ponme|pongame|póngame|agregame|agrégame|agrega|agregue|anotame|anótame|anota)\s+(.+)$/i);
     if (verbDriven?.[2]) {
-        const remainder = cleanSearchTerm(normalizeQuantityWords(verbDriven[2]));
+        const remainder = cleanSearchTerm(normalizeQuantityWords(verbDriven[2])).replace(/^bien\s+/i, "");
         const qtyFromVerb = remainder.match(/(\d+(?:[.,]\d+)?)\s+(.+)/);
         if (qtyFromVerb) {
             const quantity = parseNumeric(qtyFromVerb[1]);
@@ -1626,11 +1625,11 @@ function parseOrderIntent(message: string): { quantity: number | null; product: 
         if (product) return { quantity: null, product };
     }
 
-    const embeddedVerb = normalizedRaw.match(/\b(quiero|necesito|me regalas|deme|dame|ponme|pongame|póngame|agregame|agrégame|agrega|anotame|anótame|anota)\s+(.+)$/i);
+    const embeddedVerb = normalizedRaw.match(/\b(quiero|necesito|me regalas|deme|dame|ponme|pongame|póngame|agregame|agrégame|agrega|agregue|anotame|anótame|anota)\s+(.+)$/i);
     if (embeddedVerb?.[2]) {
         const remainder = cleanSearchTerm(
-            embeddedVerb[2].replace(/^(quiero|necesito|me regalas|deme|dame|ponme|pongame|póngame|agregame|agrégame|agrega|anotame|anótame|anota)\s+/i, "")
-        );
+            embeddedVerb[2].replace(/^(quiero|necesito|me regalas|deme|dame|ponme|pongame|póngame|agregame|agrégame|agrega|agregue|anotame|anótame|anota)\s+/i, "")
+        ).replace(/^bien\s+/i, "");
         const parsedEmbedded = parseOrderIntent(remainder);
         if (parsedEmbedded) return parsedEmbedded;
     }
@@ -1787,7 +1786,7 @@ function isLikelyAddressText(message: string) {
 
 function hasEmbeddedOrderSignal(message: string) {
     const normalized = stripDiacritics(normalizeText(message));
-    return /\b(quiero|necesito|dame|deme|me regalas|ponme|pongame|agregame|agrega|anotame|anota|llevar|pedido|libra|libras|kilo|kilos|kg|unidad|unidades|und)\b/.test(normalized);
+    return /\b(quiero|necesito|dame|deme|me regalas|ponme|pongame|agregame|agrega|agregue|anotame|anota|llevar|pedido|libra|libras|kilo|kilos|kg|unidad|unidades|und)\b/.test(normalized);
 }
 
 function hasConcreteOrderDetail(message: string) {
@@ -1881,6 +1880,12 @@ function extractQuantityUnitOnly(message: string): { quantity: number; unit: "lb
 
 function parseCorrectionMessage(message: string): { from: string; to: string } | null {
     const raw = normalizeText(message).replace(/\s+/g, " ").trim();
+    const swap = raw.match(/^(?:mejor\s+)?(?:cambia|cambie|cambiar|cámbiame|cambiame|reemplaza|reemplace)\s+(.+?)\s+por\s+(.+)$/i);
+    if (swap?.[1] && swap?.[2]) {
+        const from = normalizeRequestedProductTerm(swap[1]);
+        const to = normalizeRequestedProductTerm(swap[2]);
+        if (from && to) return { from, to };
+    }
     const m = raw.match(/^(.+?)\s+no[, ]+\s*(.+)$/i);
     if (!m?.[1] || !m?.[2]) return null;
     const from = cleanSearchTerm(m[1]);
@@ -2982,7 +2987,7 @@ function correctCommonProductTypos(raw: string) {
 
 function normalizeRequestedProductTerm(raw: string) {
     const base = correctCommonProductTypos(stripLeadingConversationFillers(raw));
-    const tokens = tokenizeForMatch(base);
+    const tokens = tokenizeForMatch(base).filter((token) => !["del", "al", "tien", "tiene", "tienes"].includes(token));
     if (tokens.length === 0) return cleanSearchTerm(base);
 
     return tokens
@@ -3088,7 +3093,7 @@ function extractProductFromAvailabilityQuestion(message: string) {
     }
 
     return normalizeRequestedProductTerm(text
-        .replace(/(que\s+(frutas|verduras|productos)\s+(tienen|hay|manejan|venden|disponibles)|que\s+\w+\s+tienes|tiene|hay|maneja|vende|cuenta con|disponible|disponibles|tienes)/g, " ")
+        .replace(/\b(que\s+(frutas|verduras|productos)\s+(tienen|hay|manejan|venden|disponibles)|que\s+\w+\s+tienes|tienes|tiene|hay|maneja|vende|cuenta con|disponible|disponibles)\b/g, " ")
         .replace(/\b(kilo|kilos|kg|libra|libras|lb|unidad|unidades|und|carton|cartones|bidon|bidones|canastilla|canastillas|lt|lts|litro|litros|bja|bandeja|bandejas|atado|atados|rama|ramas|ramo|ramos|de|el|la|los|las)\b/g, " ")
         .replace(/\b(que|cuales|cuáles)\b/g, " ")
         .replace(/\s+/g, " ")
@@ -3600,7 +3605,7 @@ export async function POST(req: Request) {
                 return assistantJson(reply);
             }
 
-            if (isFrustrationMessage(lastUserContent)) {
+            if (isFrustrationMessage(lastUserContent) && !messageCarriesOwnProductIntent(lastUserContent)) {
                 const reply = `Tiene toda la razón, veci. Perdón por enredarla. ${fieldQuestion(missingBefore)}`;
                 if (sessionId) {
                     await prisma.message.create({ data: { sessionId, role: "assistant", content: reply } });
@@ -3648,6 +3653,12 @@ export async function POST(req: Request) {
                 await prisma.message.create({ data: { sessionId, role: "assistant", content: reply } });
             }
             return assistantJson(reply);
+        }
+
+        if (draft.pendingCheckoutAfterIntake && parseMultipleOrderIntents(lastUserContent).length > 0) {
+            draft.pendingCheckoutAfterIntake = false;
+            draft.awaitingCheckoutConfirmation = false;
+            await saveDraft(sessionId, draft);
         }
 
         if (draft.pendingCheckoutAfterIntake) {
@@ -4181,6 +4192,62 @@ export async function POST(req: Request) {
         }
 
         if (draft.awaitingCheckoutConfirmation) {
+            const revisionIntents = parseMultipleOrderIntents(lastUserContent);
+            if (revisionIntents.length > 0) {
+                draft.awaitingCheckoutConfirmation = false;
+                draft.pendingCheckoutAfterIntake = false;
+                const { resolved, notFound, substitutionNotes, ambiguous, unitClarification, quantityRestriction } = await resolveIntents(revisionIntents, draft.cart, config);
+                if (ambiguous) {
+                    const mergedResolved = mergeResolvedIntoDraft(draft, resolved, extractUnitChoice(lastUserContent));
+                    armPendingVariant(draft, ambiguous, extractUnitChoice(lastUserContent));
+                    const pendingFollowups = unresolvedFollowupIntents(revisionIntents, mergedResolved, ambiguous.searchTerm);
+                    draft.pendingVariant = {
+                        ...draft.pendingVariant!,
+                        followupIntents: pendingFollowups
+                    };
+                    await saveDraft(sessionId, draft);
+                    const reply = `${resolvedItemsSummary(mergedResolved, substitutionNotes, notFound)}${variantPrompt(ambiguous.searchTerm, ambiguous.options)}${pendingIntentQueueText(pendingFollowups)}${missingUnitHintForIntents(revisionIntents)}`.trim();
+                    if (sessionId) {
+                        await prisma.message.create({ data: { sessionId, role: "assistant", content: reply } });
+                    }
+                    return assistantJson(reply);
+                }
+                if (quantityRestriction) {
+                    const mergedResolved = mergeResolvedIntoDraft(draft, resolved, extractUnitChoice(lastUserContent));
+                    draft.pendingQuantity = { item: quantityRestriction.item };
+                    draft.pendingFollowupIntents = unresolvedAfterQuantityRestriction(revisionIntents, mergedResolved, quantityRestriction);
+                    await saveDraft(sessionId, draft);
+                    const reply = `${resolvedItemsSummary(mergedResolved, substitutionNotes, notFound)}${quantityRestrictionReply(quantityRestriction.intent, quantityRestriction.item)}`.trim();
+                    if (sessionId) {
+                        await prisma.message.create({ data: { sessionId, role: "assistant", content: reply } });
+                    }
+                    return assistantJson(reply);
+                }
+                if (unitClarification) {
+                    const mergedResolved = mergeResolvedIntoDraft(draft, resolved, extractUnitChoice(lastUserContent));
+                    draft.pendingUnitIntents = [unitClarification.intent];
+                    draft.pendingUnitChoice = unitClarification.intent.requestedUnit || null;
+                    draft.pendingFollowupIntents = unresolvedAfterUnitClarification(revisionIntents, mergedResolved, unitClarification);
+                    await saveDraft(sessionId, draft);
+                    const reply = `${resolvedItemsSummary(mergedResolved, substitutionNotes, notFound)}${unitClarificationReply(unitClarification.intent, unitClarification.item)}`.trim();
+                    if (sessionId) {
+                        await prisma.message.create({ data: { sessionId, role: "assistant", content: reply } });
+                    }
+                    return assistantJson(reply);
+                }
+                if (resolved.length > 0) {
+                    const resolvedWithUnit = mergeResolvedIntoDraft(draft, resolved, extractUnitChoice(lastUserContent));
+                    await saveDraft(sessionId, draft);
+                    const subtotal = resolvedWithUnit.reduce((acc, item) => acc + (item.quantity * item.price), 0);
+                    const notFoundText = notFound.length > 0 ? `\nNo encontré: ${notFound.join(", ")}.` : "";
+                    const reply = `Listo, veci. Reabrí el pedido y agregué esto:\n${resolvedWithUnit.map((i) => `- ${i.quantity} ${formatLineUnit(i.unit)} de ${i.name} @ $${i.price} = $${i.quantity * i.price}`).join("\n")}\nSubtotal de esta tanda: $${subtotal}.${notFoundText}\n¿Qué más necesita?`;
+                    if (sessionId) {
+                        await prisma.message.create({ data: { sessionId, role: "assistant", content: reply } });
+                    }
+                    return assistantJson(reply);
+                }
+            }
+
             if (isAffirmative(lastUserContent)) {
                 const missing = firstMissingCheckoutField(profile);
                 if (missing) {
@@ -4249,7 +4316,7 @@ export async function POST(req: Request) {
             return assistantJson(reply);
         }
 
-        if (isFrustrationMessage(lastUserContent)) {
+        if (isFrustrationMessage(lastUserContent) && !messageCarriesOwnProductIntent(lastUserContent)) {
             const reply = "Tiene toda la razón, veci. Perdón por enredarla. Arranquemos limpio: dígame producto y cantidad con la medida exacta del catálogo (ej: `1 libra de cilantro` o `2 kilos de tomate`) y se lo anoto bien de una.";
             if (sessionId) {
                 await prisma.message.create({ data: { sessionId, role: "assistant", content: reply } });
