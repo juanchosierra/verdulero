@@ -128,12 +128,18 @@ function isValidEmail(value: string) {
     return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim());
 }
 
-function isClickableAssistantOption(content: string, line: string) {
-    if (!line.startsWith("- ")) return false;
-    const normalized = content
+function normalizeUiText(value: string) {
+    return value
         .normalize("NFD")
         .replace(/[\u0300-\u036f]/g, "")
-        .toLowerCase();
+        .toLowerCase()
+        .replace(/\s+/g, " ")
+        .trim();
+}
+
+function isClickableAssistantOption(content: string, line: string) {
+    if (!line.startsWith("- ")) return false;
+    const normalized = normalizeUiText(content);
 
     return (
         /opciones reales|estas opciones|cual le doy|cual le anoto|le sirve alguna|necesito que me diga cual/.test(normalized) &&
@@ -291,12 +297,7 @@ function renderAssistantMessage(content: string, onOptionClick?: (option: string
 }
 
 function shouldShowCheckoutDecisionButtons(content: string) {
-    const normalized = content
-        .normalize("NFD")
-        .replace(/[\u0300-\u036f]/g, "")
-        .toLowerCase()
-        .replace(/\s+/g, " ")
-        .trim();
+    const normalized = normalizeUiText(content);
 
     return (
         normalized.includes('si esta todo bien, confirmeme con "si" o "no"') ||
@@ -305,6 +306,22 @@ function shouldShowCheckoutDecisionButtons(content: string) {
         normalized.includes('me confirmas por favor con "si" o "no" para enviar tu pedido') ||
         (normalized.includes("confirm") && normalized.includes('"si" o "no"'))
     );
+}
+
+function shouldShowFinalizeOrderButton(content: string) {
+    const normalized = normalizeUiText(content);
+
+    const asksForMore =
+        /que mas (necesita|necesitas|te anoto|le anoto|te pongo|le pongo|te ponemos|le ponemos|hace falta|te hace falta|le hace falta)/.test(normalized) ||
+        /quiere algo mas|quieres algo mas|algo mas para la canasta/.test(normalized);
+
+    const isFinalConfirmation =
+        /tirilla de compra|resumen final|total a pagar|fecha de entrega|confirmar pedido|confirma por favor|confirmeme|confirmame|pedido confirmado|numero de orden/.test(normalized);
+
+    const isProductChoice =
+        /opciones reales|estas opciones|cual le doy|cual te doy|cual le anoto|cual te anoto|le sirve alguna|necesito que me diga cual/.test(normalized);
+
+    return asksForMore && !isFinalConfirmation && !isProductChoice;
 }
 
 const DEFAULT_WELCOME_MESSAGE = "¡Qué tal, veci! Bienvenido a la plaza digital. Soy El Verdulero, ¿qué te vamos a poner en la canasta hoy?";
@@ -1189,8 +1206,8 @@ export default function ChatPage() {
     );
 
     const renderCartPanel = (isMobile = false) => (
-        <div className="flex h-full flex-col overflow-hidden">
-            <div className="flex items-center justify-between border-b border-gray-100 px-4 py-3">
+        <div className="flex h-full min-h-0 flex-col overflow-hidden">
+            <div className="flex shrink-0 items-center justify-between border-b border-gray-100 px-4 py-3">
                 <div>
                     <h2 className="text-sm font-black uppercase tracking-widest text-gray-700">Tu Canasta</h2>
                     <p className="mt-1 text-[11px] font-semibold text-gray-400">
@@ -1212,7 +1229,7 @@ export default function ChatPage() {
                 </div>
             </div>
 
-            <div className="flex-1 overflow-y-auto p-4 space-y-3">
+            <div className="min-h-0 flex-1 space-y-3 overflow-y-auto p-4">
                 {cartItems.length === 0 && (
                     <div className="rounded-[2rem] border border-dashed border-gray-200 bg-gray-50 px-5 py-16 text-center">
                         <p className="text-sm font-black text-gray-500">Todavía no hay productos en la canasta.</p>
@@ -1260,7 +1277,7 @@ export default function ChatPage() {
                 ))}
             </div>
 
-            <div className="border-t border-gray-100 p-5">
+            <div className="shrink-0 border-t border-gray-100 bg-white p-4 sm:p-5">
                 <div className="mb-4 space-y-3">
                     {minimumOrder > 0 && (
                         <div className={cn(
@@ -1544,30 +1561,31 @@ export default function ChatPage() {
                             initial={{ opacity: 0, y: 24, scale: 0.98 }}
                             animate={{ opacity: 1, y: 0, scale: 1 }}
                             exit={{ opacity: 0, y: 24, scale: 0.98 }}
-                            className="mx-auto flex h-full max-w-2xl items-center justify-center"
+                            className="mx-auto flex h-full max-w-2xl items-stretch justify-center sm:items-center"
                         >
-                            <div className="app-safe-panel w-full overflow-y-auto rounded-[2rem] border border-white/60 bg-white p-6 shadow-2xl md:p-8">
-                                <div className="flex items-start justify-between gap-4">
-                                    <div className="max-w-xl">
-                                        <p className="text-[11px] font-black uppercase tracking-[0.22em] text-green-700">Cierre del pedido</p>
-                                        <h2 className="mt-3 text-3xl font-black tracking-tight text-slate-900">
-                                            Completa tus datos de entrega y confirmamos.
-                                        </h2>
-                                        <p className="mt-3 text-sm font-semibold leading-relaxed text-slate-500">
-                                            Aquí sí te pido tu número de WhatsApp y tu dirección. El chat ya no te los va a volver a preguntar.
-                                        </p>
+                            <div className="app-safe-panel flex h-full min-h-0 w-full flex-col overflow-hidden rounded-[2rem] border border-white/60 bg-white shadow-2xl sm:h-auto">
+                                <div className="min-h-0 flex-1 overflow-y-auto p-5 md:p-8">
+                                    <div className="flex items-start justify-between gap-4">
+                                        <div className="max-w-xl">
+                                            <p className="text-[11px] font-black uppercase tracking-[0.22em] text-green-700">Cierre del pedido</p>
+                                            <h2 className="mt-3 text-3xl font-black tracking-tight text-slate-900">
+                                                Completa tus datos de entrega y confirmamos.
+                                            </h2>
+                                            <p className="mt-3 text-sm font-semibold leading-relaxed text-slate-500">
+                                                Aquí sí te pido tu número de WhatsApp y tu dirección. El chat ya no te los va a volver a preguntar.
+                                            </p>
+                                        </div>
+                                        <button
+                                            type="button"
+                                            onClick={() => setCheckoutOpen(false)}
+                                            className="flex h-10 w-10 items-center justify-center rounded-2xl border border-slate-200 bg-slate-50 text-slate-500"
+                                        >
+                                            <X size={18} />
+                                        </button>
                                     </div>
-                                    <button
-                                        type="button"
-                                        onClick={() => setCheckoutOpen(false)}
-                                        className="flex h-10 w-10 items-center justify-center rounded-2xl border border-slate-200 bg-slate-50 text-slate-500"
-                                    >
-                                        <X size={18} />
-                                    </button>
-                                </div>
 
-                                <div className="mt-8 grid gap-4 md:grid-cols-2">
-                                    <label className="md:col-span-2">
+                                    <div className="mt-8 grid gap-4 md:grid-cols-2">
+                                        <label className="md:col-span-2">
                                         <span className="mb-2 block text-[11px] font-black uppercase tracking-[0.18em] text-slate-500">Tu número de WhatsApp</span>
                                         <input
                                             value={checkoutForm.telefono}
@@ -1607,8 +1625,9 @@ export default function ChatPage() {
                                         {checkoutError}
                                     </div>
                                 )}
+                                </div>
 
-                                <div className="app-modal-actions mt-6 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                                <div className="app-modal-actions flex shrink-0 flex-col gap-3 border-t border-slate-100 bg-white px-5 py-4 md:flex-row md:items-center md:justify-between md:px-8 md:py-5">
                                     <p className="text-xs font-semibold text-slate-400">
                                         Vamos a usar estos datos solo para despacho y contacto del pedido.
                                     </p>
@@ -1764,7 +1783,7 @@ export default function ChatPage() {
                             initial={{ opacity: 0, y: 24 }}
                             animate={{ opacity: 1, y: 0 }}
                             exit={{ opacity: 0, y: 24 }}
-                            className="mx-auto flex h-full max-w-xl flex-col overflow-hidden rounded-[2rem] border border-gray-100 bg-white shadow-2xl"
+                            className="app-safe-panel mx-auto flex h-full max-w-xl flex-col overflow-hidden rounded-[2rem] border border-gray-100 bg-white shadow-2xl"
                         >
                             {renderCatalogPanel(true)}
                         </motion.div>
@@ -1906,7 +1925,7 @@ export default function ChatPage() {
                             initial={{ opacity: 0, y: 24 }}
                             animate={{ opacity: 1, y: 0 }}
                             exit={{ opacity: 0, y: 24 }}
-                            className="mx-auto flex h-full max-w-xl flex-col overflow-hidden rounded-[2rem] border border-gray-100 bg-white shadow-2xl"
+                            className="app-safe-panel mx-auto flex h-full max-w-xl flex-col overflow-hidden rounded-[2rem] border border-gray-100 bg-white shadow-2xl"
                         >
                             {renderCartPanel(true)}
                         </motion.div>
@@ -2026,6 +2045,24 @@ export default function ChatPage() {
                                             </button>
                                         </div>
                                     )}
+                                    {m.role === "assistant" && cartItems.length > 0 && shouldShowFinalizeOrderButton(m.content) && (
+                                        <div className="mt-3 flex w-full max-w-[92%] flex-col items-start gap-1 sm:max-w-[85%]">
+                                            <button
+                                                type="button"
+                                                onClick={handleCheckoutClick}
+                                                disabled={isLoading || !minimumMet}
+                                                className="inline-flex items-center justify-center gap-2 rounded-2xl bg-green-600 px-4 py-3 text-[11px] font-black uppercase tracking-[0.14em] text-white shadow-lg shadow-green-600/20 transition hover:bg-green-700 disabled:cursor-not-allowed disabled:bg-gray-200 disabled:text-gray-400 disabled:shadow-none"
+                                            >
+                                                <CheckCircle2 size={15} />
+                                                Finalizar pedido
+                                            </button>
+                                            {!minimumMet && minimumOrder > 0 && (
+                                                <p className="pl-1 text-[11px] font-bold text-amber-700">
+                                                    Falta {formatMoney(minimumShortfall)} para el pedido mínimo.
+                                                </p>
+                                            )}
+                                        </div>
+                                    )}
                                     {ERROR_REPORTING_UI_ENABLED && (
                                         <div className={cn("mt-1 flex w-full max-w-[85%]", m.role === "user" ? "justify-end" : "justify-start")}>
                                             <button
@@ -2065,8 +2102,8 @@ export default function ChatPage() {
 
                     <div className="app-chat-composer sticky bottom-0 z-50 border-t border-gray-100 bg-white/95 px-3 pt-2 backdrop-blur-xl sm:px-6 sm:pt-4">
                         {cartItems.length > 0 && (
-                            <div className="mb-4 hidden items-center justify-between gap-3 rounded-2xl border border-green-100 bg-green-50 px-4 py-3 lg:hidden">
-                                <div>
+                            <div className="mb-3 flex items-center justify-between gap-3 rounded-2xl border border-green-100 bg-green-50 px-3 py-2.5 md:hidden">
+                                <div className="min-w-0">
                                     <p className="text-[10px] font-black uppercase tracking-widest text-green-700">Tu canasta</p>
                                     <p className="mt-1 text-sm font-black text-green-950">{cartItems.length} productos · {formatMoney(cartTotal)}</p>
                                     {!minimumMet && minimumOrder > 0 && (
@@ -2089,11 +2126,11 @@ export default function ChatPage() {
                                 </div>
                                 <button
                                     type="button"
-                                    onClick={() => setMobileCartOpen(true)}
+                                    onClick={minimumMet ? handleCheckoutClick : () => setMobileCartOpen(true)}
                                     disabled={isLoading}
-                                    className="rounded-2xl bg-green-600 px-4 py-3 text-[11px] font-black uppercase tracking-wide text-white disabled:opacity-60"
+                                    className="shrink-0 rounded-2xl bg-green-600 px-4 py-3 text-[11px] font-black uppercase tracking-wide text-white disabled:opacity-60"
                                 >
-                                    Ver
+                                    {minimumMet ? "Finalizar" : "Ver"}
                                 </button>
                             </div>
                         )}
