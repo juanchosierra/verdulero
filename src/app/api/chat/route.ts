@@ -618,7 +618,7 @@ function buildVariantOptions(products: Array<{ id: number; name: string; price: 
             const overlap = genericStems.filter((token) => productStems.includes(token)).length;
             if (overlap === 0) return false;
             if (termTokens.length === 1) return true;
-            return overlap === genericStems.length || overlap >= Math.max(1, genericStems.length - 1);
+            return overlap === genericStems.length;
         })
         .slice(0, 4);
 
@@ -1148,7 +1148,6 @@ function sanitizeBootstrapName(text: string): string | null {
     if (value.length < 3 || value.length > 70) return null;
     if (/(hola|buenas|buenos dias|buenas tardes|buenas noches)/i.test(value)) return null;
     if (/^(cliente web|visitante web)$/i.test(value)) return null;
-    if (/(otra vez|eche|repite|repita|pedido|canasta|correo|whatsapp|telefono|n[uú]mero|monda|joda|carajos|uno nuevo|una nueva|nuevo mercado|mercado nuevo)/i.test(value)) return null;
     return value;
 }
 
@@ -1644,7 +1643,7 @@ function parseOrderIntent(message: string): { quantity: number | null; product: 
     if (qtyAndProduct) {
         const quantity = parseNumeric(qtyAndProduct[1]);
         const rawProduct = normalizeRequestedProductTerm(qtyAndProduct[2]
-            .replace(/^(kilos?|kg|libras?|lb|unidades?|unidad|unds?|und)\s*(de)?\s*/i, "")
+            .replace(/^(kilos?|kg|libras?|lb|unidades?|unidad|unds?|und|cartones?|bidones?|canastillas?|lts?|litros?|bja|bandejas?|atados?|ramas?|ramos?)\s*(de)?\s*/i, "")
             .replace(/^de\s+/i, "")
             .trim());
         // If it contains another quantity, let multi-intent parser handle it.
@@ -1868,6 +1867,11 @@ function parseRemoveItemMessage(message: string): { product: string } | null {
     return { product };
 }
 
+function isLastItemRemoveRequest(message: string) {
+    const text = stripDiacritics(normalizeText(message)).replace(/\s+/g, " ").trim();
+    return /\b(?:quite|quita|quitar|saque|saca|sacar|elimine|elimina|eliminar|borre|borra|borrar|remueva|remueve|remover)\s+(?:el|la)?\s*(?:ultimo|último|ultima|última)\b/i.test(text);
+}
+
 function extractQuantityUnitOnly(message: string): { quantity: number; unit: "lb" | "kg" | "und" } | null {
     const text = normalizeQuantityWords(normalizeText(message));
     const m = text.match(/^(\d+(?:[.,]\d+)?)\s*(kg|lb|und)\s*$/i);
@@ -1945,6 +1949,15 @@ function isRecommendationCandidate(name: string, queryTerm?: string) {
     if (n.includes("super promo")) return false;
     if (n.includes("promo") && !q.includes("promo")) return false;
     return true;
+}
+
+function visibleNotFoundTerms(terms: string[]) {
+    return terms.filter((term) => {
+        const normalized = normalizeForMatch(term);
+        if (!normalized) return false;
+        if (/^(script|alert|onclick|onerror|style|div|span|html|body)$/.test(normalized)) return false;
+        return true;
+    });
 }
 
 function detectAmbiguousQuantityProduct(message: string): string | null {
@@ -2560,6 +2573,9 @@ async function resolveIntentToCartItem(intent: ParsedIntent, cart: CartItem[], c
         }
 
         const strongProducts = filteredProducts.filter((product) => isStrongProductMatch(product.name, normalizedProductTerm));
+        if (tokenizeForMatch(normalizedProductTerm).length > 1 && strongProducts.length === 0) {
+            return { item: null };
+        }
         if (strongProducts.length > 1) {
             return {
                 item: null,
@@ -2815,7 +2831,9 @@ async function continueFollowupIntents(
 
     if (notFound.length > 0) {
         return {
-            reply: `No encontré: ${notFound.join(", ")}. ¿Qué más necesita?`
+            reply: visibleNotFoundTerms(notFound).length > 0
+                ? `No encontré: ${visibleNotFoundTerms(notFound).join(", ")}. ¿Qué más necesita?`
+                : "¿Qué más necesita?"
         };
     }
 
@@ -2935,7 +2953,8 @@ function resolvedItemsSummary(
     const lines = resolved.map((i) => `- ${i.quantity} ${formatLineUnit(i.unit)} de ${i.name} @ $${i.price} = $${i.quantity * i.price}`);
     const subtotal = resolved.reduce((acc, i) => acc + i.quantity * i.price, 0);
     const substitutionText = substitutionNotes.length > 0 ? `\nAjustes sugeridos:\n- ${substitutionNotes.join("\n- ")}` : "";
-    const notFoundText = notFound.length > 0 ? `\nNo encontré: ${notFound.join(", ")}.` : "";
+    const presentableNotFound = visibleNotFoundTerms(notFound);
+    const notFoundText = presentableNotFound.length > 0 ? `\nNo encontré: ${presentableNotFound.join(", ")}.` : "";
     return `Ya te dejé listo esto:\n${lines.join("\n")}\nSubtotal de esta tanda: $${subtotal}.${substitutionText}${notFoundText}\n`;
 }
 
@@ -4107,7 +4126,8 @@ export async function POST(req: Request) {
             await saveDraft(sessionId, draft);
             const lines = resolvedWithUnit.map((i) => `- ${i.quantity} ${formatLineUnit(i.unit)} de ${i.name} @ $${i.price} = $${i.quantity * i.price}`);
             const subtotal = resolvedWithUnit.reduce((acc, i) => acc + i.quantity * i.price, 0);
-            const notFoundText = notFound.length > 0 ? `\nNo encontré: ${notFound.join(", ")}.` : "";
+            const presentableNotFound = visibleNotFoundTerms(notFound);
+            const notFoundText = presentableNotFound.length > 0 ? `\nNo encontré: ${presentableNotFound.join(", ")}.` : "";
             const reply = `Listo, veci. Retomé su pedido:\n${lines.join("\n")}\nSubtotal de esta tanda: $${subtotal}.${notFoundText}\n¿Qué más necesita?`;
             if (sessionId) {
                 await prisma.message.create({ data: { sessionId, role: "assistant", content: reply } });
@@ -4239,7 +4259,8 @@ export async function POST(req: Request) {
                     const resolvedWithUnit = mergeResolvedIntoDraft(draft, resolved, extractUnitChoice(lastUserContent));
                     await saveDraft(sessionId, draft);
                     const subtotal = resolvedWithUnit.reduce((acc, item) => acc + (item.quantity * item.price), 0);
-                    const notFoundText = notFound.length > 0 ? `\nNo encontré: ${notFound.join(", ")}.` : "";
+                    const presentableNotFound = visibleNotFoundTerms(notFound);
+                    const notFoundText = presentableNotFound.length > 0 ? `\nNo encontré: ${presentableNotFound.join(", ")}.` : "";
                     const reply = `Listo, veci. Reabrí el pedido y agregué esto:\n${resolvedWithUnit.map((i) => `- ${i.quantity} ${formatLineUnit(i.unit)} de ${i.name} @ $${i.price} = $${i.quantity * i.price}`).join("\n")}\nSubtotal de esta tanda: $${subtotal}.${notFoundText}\n¿Qué más necesita?`;
                     if (sessionId) {
                         await prisma.message.create({ data: { sessionId, role: "assistant", content: reply } });
@@ -4342,6 +4363,24 @@ export async function POST(req: Request) {
                 }
                 return assistantJson(availability);
             }
+        }
+
+        if (isLastItemRemoveRequest(lastUserContent)) {
+            if (draft.cart.length > 0) {
+                const removed = draft.cart.pop()!;
+                draft.awaitingCheckoutConfirmation = false;
+                await saveDraft(sessionId, draft);
+                const reply = `Listo, veci. Quité ${removed.name} de la canasta. ¿Qué más necesita?`;
+                if (sessionId) {
+                    await prisma.message.create({ data: { sessionId, role: "assistant", content: reply } });
+                }
+                return assistantJson(reply);
+            }
+            const reply = "La canasta está vacía todavía, veci. Dígame qué le anoto y arrancamos.";
+            if (sessionId) {
+                await prisma.message.create({ data: { sessionId, role: "assistant", content: reply } });
+            }
+            return assistantJson(reply);
         }
 
         const removeRequest = parseRemoveItemMessage(lastUserContent);
@@ -4638,7 +4677,10 @@ export async function POST(req: Request) {
                 await saveDraft(sessionId, draft);
 
                 if (resolvedWithUnit.length === 0) {
-                    const reply = `Ay, veci, no encontré esos productos (${notFound.join(", ")}). ¿Me los manda de nuevo con otro nombre?`;
+                    const presentableNotFound = visibleNotFoundTerms(notFound);
+                    const reply = presentableNotFound.length > 0
+                        ? `Ay, veci, no encontré esos productos (${presentableNotFound.join(", ")}). ¿Me los manda de nuevo con otro nombre?`
+                        : "Ay, veci, no encontré ese producto. ¿Me lo manda de nuevo con otro nombre?";
                     if (sessionId) {
                         await prisma.message.create({ data: { sessionId, role: "assistant", content: reply } });
                     }
@@ -4755,7 +4797,8 @@ export async function POST(req: Request) {
                 await saveDraft(sessionId, draft);
                 const lines = resolvedWithUnit.map((i) => `- ${i.quantity} ${formatLineUnit(i.unit)} de ${i.name} @ $${i.price} = $${i.quantity * i.price}`);
                 const subtotal = resolvedWithUnit.reduce((acc, i) => acc + i.quantity * i.price, 0);
-                const notFoundText = notFound.length > 0 ? `\nNo encontré: ${notFound.join(", ")}.` : "";
+                const presentableNotFound = visibleNotFoundTerms(notFound);
+                const notFoundText = presentableNotFound.length > 0 ? `\nNo encontré: ${presentableNotFound.join(", ")}.` : "";
                 const reply = followupReply?.reply
                     ? `Listo, veci. Ya retomé lo pendiente:\n${lines.join("\n")}\nSubtotal de esta tanda: $${subtotal}.${notFoundText}\n${followupReply.reply}`
                     : `Listo, veci. Ya retomé lo pendiente:\n${lines.join("\n")}\nSubtotal de esta tanda: $${subtotal}.${notFoundText}\n¿Qué más le anoto?`;
@@ -4975,7 +5018,10 @@ export async function POST(req: Request) {
             }));
 
             if (resolvedWithUnit.length === 0) {
-                let reply = `Ay, veci, no encontré esos productos (${notFound.join(", ")}).`;
+                const presentableNotFound = visibleNotFoundTerms(notFound);
+                let reply = presentableNotFound.length > 0
+                    ? `Ay, veci, no encontré esos productos (${presentableNotFound.join(", ")}).`
+                    : "Ay, veci, no encontré ese producto.";
                 const alternatives = await suggestAlternativesFromInventory(notFound[0] || "", draft.cart, config, 2);
                 if (alternatives.length > 0) {
                     const lines = alternatives.map((a) => `- ${a.name} ($${a.price})`).join("\n");
@@ -5008,7 +5054,8 @@ export async function POST(req: Request) {
 
             const lines = resolvedWithUnit.map((i) => `- ${i.quantity} ${formatLineUnit(i.unit)} de ${i.name} @ $${i.price} = $${i.quantity * i.price}`);
             const subtotal = resolvedWithUnit.reduce((acc, i) => acc + i.quantity * i.price, 0);
-            const notFoundText = notFound.length > 0 ? `\nNo encontré: ${notFound.join(", ")}.` : "";
+            const presentableNotFound = visibleNotFoundTerms(notFound);
+            const notFoundText = presentableNotFound.length > 0 ? `\nNo encontré: ${presentableNotFound.join(", ")}.` : "";
             const substitutionText = substitutionNotes.length > 0 ? `\nAjustes sugeridos:\n- ${substitutionNotes.join("\n- ")}` : "";
             const verduleroRules = await buildVerduleroRuleSuggestions(lastUserContent, draft.cart, config);
             const ruleText = verduleroRules.length > 0

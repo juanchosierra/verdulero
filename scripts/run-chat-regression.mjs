@@ -694,6 +694,63 @@ const scenarios = [
     steps: [
       ["no joda agregame bien 2 libras de papa criolla", [/(papa criolla|subtotal|agregu[eé]|qu[eé] m[aá]s necesita)/i]]
     ]
+  },
+  {
+    id: "R041",
+    name: "quitar_ultimo_producto",
+    bootstrapProfile: {
+      correo: "$EMAIL",
+      ciudad: "$CITY",
+      nombre: "Quita Ultimo"
+    },
+    steps: [
+      ["1 libra de zanahoria", [/(zanahoria|subtotal|agregu[eé])/i]],
+      ["1 libra de limon criollo", [/(lim[oó]n criollo|subtotal|agregu[eé])/i]],
+      ["quita el ultimo", [/(quit[eé]|lim[oó]n criollo|canasta)/i]],
+      ["cuanto va", [/(zanahoria|total|tirilla)/i]]
+    ],
+    assert(history) {
+      const last = String(history[history.length - 1]?.reply || "");
+      if (/lim[oó]n criollo @/i.test(last)) {
+        throw new Error("No quitó el último producto de la canasta.");
+      }
+    }
+  },
+  {
+    id: "R042",
+    name: "producto_inexistente_no_sugiere_por_adjetivo",
+    bootstrapProfile: {
+      correo: "$EMAIL",
+      ciudad: "$CITY",
+      nombre: "No Catalogo"
+    },
+    steps: [
+      ["2 libras de unicornio verde", [/(no encontr[eé]|no tengo|no manejo|otro nombre)/i]]
+    ],
+    assert(history) {
+      const last = String(history[history.length - 1]?.reply || "");
+      if (/manzana verde|mango verde|zukini verde|platano verde|pl[aá]tano verde|opciones reales/i.test(last)) {
+        throw new Error("Sugirió productos por el adjetivo 'verde' aunque el producto base no existe.");
+      }
+    }
+  },
+  {
+    id: "R043",
+    name: "ruido_html_no_aparece_como_producto",
+    bootstrapProfile: {
+      correo: "$EMAIL",
+      ciudad: "$CITY",
+      nombre: "Script Malo"
+    },
+    steps: [
+      ["<script>alert(1)</script> dame 2 libras de zanahoria", [/(zanahoria|subtotal|agregu[eé])/i]]
+    ],
+    assert(history) {
+      const last = String(history[history.length - 1]?.reply || "");
+      if (/script|alert|<script>|no encontr[eé]/i.test(last)) {
+        throw new Error("Mostró ruido HTML como producto faltante.");
+      }
+    }
   }
 ];
 
