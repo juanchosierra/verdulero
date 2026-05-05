@@ -446,14 +446,14 @@ function normalizeUnitCode(raw: unknown): string {
 
 const UNIT_TEXT_REPLACEMENTS: Array<[RegExp, string]> = [
     [/\b(k|ks|kilo|kilos|kg|kgs|kilito|kilitos)\b/gi, "kg"],
-    [/\b(lb|lbs|lbr|lbrs|libra|libras|librita|libritas)\b/gi, "lb"],
+    [/\b(lb|lbs|lbr|lbrs|libra|libras|livra|livras|librita|libritas)\b/gi, "lb"],
     [/\b(und|unds|unidad|unidades|unit|units)\b/gi, "und"],
     [/\b(carton|cartones)\b/gi, "carton"],
     [/\b(bidon|bidones)\b/gi, "bidon"],
     [/\b(canastilla|canastillas)\b/gi, "canastilla"],
     [/\b(lt|lts|litro|litros)\b/gi, "lts"],
     [/\b(bja|bandeja|bandejas)\b/gi, "bja"],
-    [/\b(atado|atados|ramo|ramos|rama|ramas|manojo|manojos)\b/gi, "atado"]
+    [/\b(atado|atados|atdo|atdos|ramo|ramos|rama|ramas|manojo|manojos)\b/gi, "atado"]
 ];
 
 function normalizeUnitSynonymsInText(raw: string) {
@@ -2971,8 +2971,17 @@ function stripLeadingConversationFillers(raw: string) {
         .trim();
 }
 
+function correctCommonProductTypos(raw: string) {
+    return raw
+        .replace(/\bsanaoria\b/g, "zanahoria")
+        .replace(/\bsanahoria\b/g, "zanahoria")
+        .replace(/\bperegil\b/g, "perejil")
+        .replace(/\bsilantro\b/g, "cilantro")
+        .replace(/\btomte\b/g, "tomate");
+}
+
 function normalizeRequestedProductTerm(raw: string) {
-    const base = stripLeadingConversationFillers(raw);
+    const base = correctCommonProductTypos(stripLeadingConversationFillers(raw));
     const tokens = tokenizeForMatch(base);
     if (tokens.length === 0) return cleanSearchTerm(base);
 
@@ -3153,8 +3162,7 @@ async function availabilityReply(message: string, config?: StoreConfigLike) {
             : ["cebolla", "tomate", "zanahoria", "papa", "pepino", "brocoli", "repollo", "pimenton", "cilantro", "ajo", "ahuyama", "zukini", "champiñon", "champinon"];
         const products = dedupeVisibleProducts(
             snapshot.filter((product) => {
-                const normalizedName = normalizeForMatch(product.name);
-                return categoryHints.some((hint) => normalizedName.includes(stripDiacritics(hint)));
+                return categoryHints.some((hint) => hasTokenMatch(product.name, [hint]));
             })
         ).slice(0, 8);
 
@@ -4376,7 +4384,7 @@ export async function POST(req: Request) {
 
         // NOTE: explicit affirmative handling only occurs on known pending/checkout states.
 
-        if (/^(ver carrito|carrito|que llevo|qué llevo|resumen)$/i.test(cleanSearchTerm(lastUserContent))) {
+        if (/^(ver carrito|carrito|que llevo|qué llevo|cuanto llevo|cuánto llevo|cuanto va|cuánto va|resumen)$/i.test(cleanSearchTerm(lastUserContent))) {
             let effectiveCart = draft.cart;
             if (effectiveCart.length === 0) {
                 effectiveCart = await reconstructCartFromMessages(messages, config);

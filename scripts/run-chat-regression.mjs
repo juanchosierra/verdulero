@@ -517,6 +517,74 @@ const scenarios = [
         throw new Error("No resolvió el limón pendiente de la cola larga.");
       }
     }
+  },
+  {
+    id: "R031",
+    name: "frutas_para_jugo_no_contamina_verduras",
+    steps: [
+      ["que frutas tienen para jugo", [/(frutas|aguacate|lim[oó]n|pi[ñn]a|uchuva|cat[aá]logo)/i]]
+    ],
+    assert(history) {
+      const last = String(history[history.length - 1]?.reply || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+      if (/\b(espinaca|brocoli|cilantro|tomate|papa)\b/.test(last)) {
+        throw new Error("La respuesta de frutas se contaminó con verduras.");
+      }
+    }
+  },
+  {
+    id: "R032",
+    name: "typo_livras_sanaoria",
+    bootstrapProfile: {
+      correo: "$EMAIL",
+      ciudad: "$CITY",
+      nombre: "Ana"
+    },
+    steps: [
+      ["2 livras de sanaoria", [/(zanahoria|subtotal|agregu[eé]|qu[eé] m[aá]s necesita)/i]]
+    ],
+    assert(history) {
+      const last = String(history[history.length - 1]?.reply || "");
+      if (/no encontr[eé]|no manejo/i.test(last)) {
+        throw new Error("No recuperó el typo 'livras de sanaoria'.");
+      }
+    }
+  },
+  {
+    id: "R033",
+    name: "typo_atdo_peregil",
+    bootstrapProfile: {
+      correo: "$EMAIL",
+      ciudad: "$CITY",
+      nombre: "Ana"
+    },
+    steps: [
+      ["1 atdo de peregil", [/(perejil|subtotal|agregu[eé]|qu[eé] m[aá]s necesita)/i]]
+    ],
+    assert(history) {
+      const last = String(history[history.length - 1]?.reply || "");
+      if (/no encontr[eé]|no manejo/i.test(last)) {
+        throw new Error("No recuperó el typo 'atdo de peregil'.");
+      }
+    }
+  },
+  {
+    id: "R034",
+    name: "cuanto_va_muestra_carrito",
+    bootstrapProfile: {
+      correo: "$EMAIL",
+      ciudad: "$CITY",
+      nombre: "Ana"
+    },
+    steps: [
+      ["1 libra de zanahoria", [/(zanahoria|subtotal|agregu[eé]|qu[eé] m[aá]s necesita)/i]],
+      ["cuanto va", [/(carrito|zanahoria|total|\$)/i]]
+    ],
+    assert(history) {
+      const last = String(history[history.length - 1]?.reply || "");
+      if (/opciones reales|cu[aá]l le doy|no encontr[eé]|no manejo/i.test(last)) {
+        throw new Error("'cuanto va' se interpretó como búsqueda en vez de carrito.");
+      }
+    }
   }
 ];
 

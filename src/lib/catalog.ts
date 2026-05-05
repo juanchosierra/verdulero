@@ -44,6 +44,10 @@ const PRODUCT_SEARCH_ALIASES: Record<string, string[]> = {
   cebolla_de_rama: ["cebolla larga pelada"],
   silantro: ["cilantro", "cilantro completo"],
   cilantro_completo: ["cilantro completo"],
+  sanaoria: ["zanahoria"],
+  sanahoria: ["zanahoria"],
+  peregil: ["perejil", "perejil liso completo"],
+  perejil_liso: ["perejil liso completo"],
   tomte: ["tomate"],
   tomate_chont: ["tomate chonto"],
   tomate_larga_vida: ["tomate chonto"],
@@ -67,14 +71,14 @@ export function normalizeUnitCode(raw: unknown): string {
   const value = stripDiacritics(String(raw || "").toLowerCase().trim());
   if (!value) return "";
   if (/(^|\b)(kg|kilo|kilos)($|\b)/.test(value)) return "kg";
-  if (/(^|\b)(lb|lbr|libra|libras)($|\b)/.test(value)) return "lb";
+  if (/(^|\b)(lb|lbr|libra|libras|livra|livras)($|\b)/.test(value)) return "lb";
   if (/(^|\b)(und|unidad|unidades)($|\b)/.test(value)) return "und";
   if (/(^|\b)(carton|cartones)($|\b)/.test(value)) return "carton";
   if (/(^|\b)(bidon|bidones)($|\b)/.test(value)) return "bidon";
   if (/(^|\b)(canastilla|canastillas)($|\b)/.test(value)) return "canastilla";
   if (/(^|\b)(lt|lts|litro|litros)($|\b)/.test(value)) return "lts";
   if (/(^|\b)(bja|bandeja|bandejas)($|\b)/.test(value)) return "bja";
-  if (/(^|\b)(atado|atados|rama|ramas|ramo|ramos)($|\b)/.test(value)) return "atado";
+  if (/(^|\b)(atado|atados|atdo|atdos|rama|ramas|ramo|ramos)($|\b)/.test(value)) return "atado";
   return "";
 }
 
