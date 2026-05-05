@@ -13,6 +13,7 @@ import {
     searchCatalogProducts,
     pickBestCatalogProduct,
     invalidateCatalogSnapshot,
+    isPackagedVolumeUnitProduct,
     productCandidates as sharedProductCandidates
 } from "@/lib/catalog";
 import { buildCatalogSystemContext } from "@/lib/ai-context";
@@ -86,6 +87,7 @@ METODOLOGÍA OBLIGATORIA:
 4) Si el cliente pregunta precio ("cuánto vale la piña"), responde precio exacto consultando get_products.
 5) Durante pedido:
    - confirma presentación/unidad (unidad, libra, kilo) según aplique
+   - si un producto dice "x 4 litros" y es un zumo/jugo embotellado, se vende por botella/unidad, no por litros sueltos; pregunta cuántas botellas de 4 litros
    - sugiere al cierre 3 productos adicionales que no estén en la canasta
    - entrega resumen con subtotal por ítem y total final contraentrega.
 6) No inventes productos ni precios.
@@ -434,7 +436,7 @@ function normalizeUnitCode(raw: unknown): string {
     if (!value) return "";
     if (["lb", "lbs", "lbr", "lbrs", "libra", "libras", "librita", "libritas"].includes(value)) return "lb";
     if (["k", "ks", "kilo", "kilos", "kg", "kgs", "kilito", "kilitos"].includes(value)) return "kg";
-    if (["und", "unds", "unidad", "unidades", "unit", "units"].includes(value)) return "und";
+    if (["und", "unds", "unidad", "unidades", "unit", "units", "botella", "botellas", "frasco", "frascos"].includes(value)) return "und";
     if (["carton", "cartones"].includes(value)) return "carton";
     if (["bidon", "bidones"].includes(value)) return "bidon";
     if (["canastilla", "canastillas"].includes(value)) return "canastilla";
@@ -447,7 +449,7 @@ function normalizeUnitCode(raw: unknown): string {
 const UNIT_TEXT_REPLACEMENTS: Array<[RegExp, string]> = [
     [/\b(k|ks|kilo|kilos|kg|kgs|kilito|kilitos)\b/gi, "kg"],
     [/\b(lb|lbs|lbr|lbrs|libra|libras|livra|livras|librita|libritas)\b/gi, "lb"],
-    [/\b(und|unds|unidad|unidades|unit|units)\b/gi, "und"],
+    [/\b(und|unds|unidad|unidades|unit|units|botella|botellas|frasco|frascos)\b/gi, "und"],
     [/\b(carton|cartones)\b/gi, "carton"],
     [/\b(bidon|bidones)\b/gi, "bidon"],
     [/\b(canastilla|canastillas)\b/gi, "canastilla"],
@@ -464,11 +466,13 @@ function normalizeUnitSynonymsInText(raw: string) {
     return text;
 }
 
-function unitShortLabel(unit: string) {
+function unitShortLabel(unit: string, productName?: string | null) {
+    if (isPackagedVolumeUnitProduct(productName)) return "Botella de 4 litros";
     return UNIT_LABELS[unit] || unit || "Und (Unidad)";
 }
 
-function unitAskLabel(unit: string) {
+function unitAskLabel(unit: string, productName?: string | null) {
+    if (isPackagedVolumeUnitProduct(productName)) return "botellas de 4 litros";
     if (unit === "lb") return "libras";
     if (unit === "kg") return "kilos";
     if (unit === "und") return "unidades";
@@ -481,11 +485,15 @@ function unitAskLabel(unit: string) {
     return "unidades";
 }
 
-function formatLineUnit(unit: string) {
+function formatLineUnit(unit: string, productName?: string | null, quantity?: number) {
+    if (isPackagedVolumeUnitProduct(productName)) {
+        return quantity === 1 ? "botella de 4 litros" : "botellas de 4 litros";
+    }
     return unit || "und";
 }
 
-function canonicalCatalogUnit(unit: string) {
+function canonicalCatalogUnit(unit: string, productName?: string | null) {
+    if (isPackagedVolumeUnitProduct(productName)) return "und";
     return unit;
 }
 
@@ -493,22 +501,23 @@ function isWeightUnit(unit: string | null | undefined) {
     return unit === "lb" || unit === "kg";
 }
 
-function requiresUnitClarification(requestedUnit: string | null | undefined, catalogUnit: string | null | undefined) {
+function requiresUnitClarification(requestedUnit: string | null | undefined, catalogUnit: string | null | undefined, productName?: string | null) {
     if (!requestedUnit || !catalogUnit) return false;
-    const normalizedCatalogUnit = canonicalCatalogUnit(catalogUnit);
+    const normalizedCatalogUnit = canonicalCatalogUnit(catalogUnit, productName);
     if (requestedUnit === normalizedCatalogUnit) return false;
     return true;
 }
 
 function unitClarificationReply(intent: ParsedIntent, catalogItem: CartItem) {
     const requestedLabel = unitShortLabel(intent.requestedUnit || "").toLowerCase();
-    const catalogLabel = unitShortLabel(canonicalCatalogUnit(catalogItem.unit)).toLowerCase();
-    return `Ojo, veci: ${catalogItem.name} se maneja en ${catalogLabel}, no en ${requestedLabel}. Para no equivocarme, mándamelo en ${unitAskLabel(canonicalCatalogUnit(catalogItem.unit))}, por ejemplo: \`${intent.quantity} ${unitAskLabel(canonicalCatalogUnit(catalogItem.unit))} de ${catalogItem.name}\`.`;
+    const catalogUnit = canonicalCatalogUnit(catalogItem.unit, catalogItem.name);
+    const catalogLabel = unitShortLabel(catalogUnit, catalogItem.name).toLowerCase();
+    return `Ojo, veci: ${catalogItem.name} se maneja en ${catalogLabel}, no en ${requestedLabel}. Para no equivocarme, mándamelo en ${unitAskLabel(catalogUnit, catalogItem.name)}, por ejemplo: \`${intent.quantity} ${unitAskLabel(catalogUnit, catalogItem.name)} de ${catalogItem.name}\`.`;
 }
 
-function unitQuantityQuestion(unit: string) {
-    const label = unitAskLabel(unit);
-    const article = /^(unidades|canastillas|bandejas|libras)$/.test(label) ? "¿Cuántas" : "¿Cuántos";
+function unitQuantityQuestion(unit: string, productName?: string | null) {
+    const label = unitAskLabel(unit, productName);
+    const article = /^(unidades|canastillas|bandejas|libras|botellas)/.test(label) ? "¿Cuántas" : "¿Cuántos";
     return `${article} ${label} le doy?`;
 }
 
@@ -520,8 +529,8 @@ function formatQuantityValue(quantity: number) {
 
 function quantityRestrictionReply(intent: ParsedIntent, catalogItem: CartItem) {
     const measure = getCatalogMeasureProfile(catalogItem.unit);
-    const lowerLabel = measure.unitLabel.toLowerCase();
-    const lowerAskLabel = unitAskLabel(catalogItem.unit);
+    const lowerLabel = unitShortLabel(catalogItem.unit, catalogItem.name).toLowerCase();
+    const lowerAskLabel = unitAskLabel(catalogItem.unit, catalogItem.name);
     const lowerOption = Math.max(1, Math.floor(intent.quantity));
     const upperOption = Math.max(lowerOption + 1, Math.ceil(intent.quantity));
     if (allowsFractionalQuantity(catalogItem.unit)) {
@@ -575,7 +584,7 @@ function enrichProductsWithUnits(products: any[], searchTerm: string) {
         price: parseFloat(p.price),
         stock_status: p.stock_status,
         image: p.images?.[0]?.src || null,
-        unit: extractUnitFromWooProduct(p)
+        unit: canonicalCatalogUnit(extractUnitFromWooProduct(p), p.name)
     }));
 
     const queryTokens = tokenizeForMatch(searchTerm);
@@ -589,7 +598,7 @@ function enrichProductsWithUnits(products: any[], searchTerm: string) {
     const inferred = Array.from(siblingUnits.entries()).sort((a, b) => b[1] - a[1])[0]?.[0] || "";
     return mapped.map((product) => ({
         ...product,
-        unit: product.unit || inferred || "und"
+        unit: canonicalCatalogUnit(product.unit || inferred || "und", product.name)
     }));
 }
 
@@ -627,14 +636,14 @@ function buildVariantOptions(products: Array<{ id: number; name: string; price: 
         product_id: p.id,
         name: p.name,
         quantity: 1,
-        unit: p.unit || "und",
+        unit: canonicalCatalogUnit(p.unit || "und", p.name),
         price: Number(p.price || 0),
         image: p.image || undefined
     }));
 }
 
 function variantPrompt(searchTerm: string, options: CartItem[]) {
-    const lines = options.map((option) => `- ${option.name} (${unitShortLabel(option.unit)}) - $${option.price}`).join("\n");
+    const lines = options.map((option) => `- ${option.name} (${unitShortLabel(option.unit, option.name)}) - $${option.price}`).join("\n");
     return `Veci, para ${searchTerm} tengo estas opciones reales:\n${lines}\n¿Cuál le doy?`;
 }
 
@@ -659,7 +668,7 @@ function itemAlreadyInCartReply(product: string, cart: CartItem[]) {
     if (tokens.length === 0) return null;
     const existing = cart.find((item) => hasTokenMatch(item.name, tokens));
     if (!existing) return null;
-    return `Ya lo tengo agregado, veci: ${existing.quantity} ${formatLineUnit(existing.unit)} de ${existing.name}. ¿Qué más necesita?`;
+    return `Ya lo tengo agregado, veci: ${existing.quantity} ${formatLineUnit(existing.unit, existing.name, existing.quantity)} de ${existing.name}. ¿Qué más necesita?`;
 }
 
 function findVariantChoice(message: string, options: CartItem[], searchTerm?: string) {
@@ -804,7 +813,7 @@ async function executeGetProductById(productId: number, config?: {
             price: parseFloat(String(p.price)),
             stock_status: p.stock_status,
             image: p.image || null,
-            unit: p.unit || "und"
+            unit: canonicalCatalogUnit(p.unit || "und", p.name)
         };
     } catch {
         return null;
@@ -819,7 +828,7 @@ function tokenizeForMatch(raw: string) {
     return normalizeForMatch(raw)
         .split(" ")
         .filter(Boolean)
-        .map((t) => t.replace(/^(k|ks|kilo|kilos|kg|kgs|lb|lbs|lbr|lbrs|libra|libras|librita|libritas|unidad|unidades|und|unds|de|el|la|los|las|marca|tipo|ref|referencia|x)$/i, ""))
+        .map((t) => t.replace(/^(k|ks|kilo|kilos|kg|kgs|lb|lbs|lbr|lbrs|libra|libras|librita|libritas|unidad|unidades|und|unds|botella|botellas|frasco|frascos|de|el|la|los|las|marca|tipo|ref|referencia|x)$/i, ""))
         .filter((t) => t.length > 1)
         .filter(Boolean);
 }
@@ -1012,7 +1021,7 @@ function parseNumeric(value: string) {
 
 function extractCompositeQuantity(text: string): number | null {
     const normalized = normalizeQuantityWords(stripDiacritics(normalizeText(text)));
-    const units = "(?:kilo|kilos|kg|libra|libras|lb|unidad|unidades|und|carton|cartones|bidon|bidones|canastilla|canastillas|lt|lts|litro|litros|bja|bandeja|bandejas|atado|atados|rama|ramas|ramo|ramos)";
+    const units = "(?:kilo|kilos|kg|libra|libras|lb|unidad|unidades|und|botella|botellas|frasco|frascos|carton|cartones|bidon|bidones|canastilla|canastillas|lt|lts|litro|litros|bja|bandeja|bandejas|atado|atados|rama|ramas|ramo|ramos)";
 
     const explicitOneAndHalf = normalized.match(new RegExp(`^(?:1\\s+)?${units}\\s+y\\s+0\\.5(?:\\s+de\\b|\\b|$)`, "i"));
     if (explicitOneAndHalf) return 1.5;
@@ -1035,7 +1044,7 @@ function extractCompositeQuantity(text: string): number | null {
 function collapseCompositeQuantityPhrases(text: string) {
     const normalized = normalizeQuantityWords(stripDiacritics(normalizeText(text)));
     return normalized.replace(
-        /\b(?:(\d+(?:[.,]\d+)?)\s+)?(kilo|kilos|kg|libra|libras|lb|unidad|unidades|und|carton|cartones|bidon|bidones|canastilla|canastillas|lt|lts|litro|litros|bja|bandeja|bandejas|atado|atados|rama|ramas|ramo|ramos)\s+y\s+0\.5\b/gi,
+        /\b(?:(\d+(?:[.,]\d+)?)\s+)?(kilo|kilos|kg|libra|libras|lb|unidad|unidades|und|botella|botellas|frasco|frascos|carton|cartones|bidon|bidones|canastilla|canastillas|lt|lts|litro|litros|bja|bandeja|bandejas|atado|atados|rama|ramas|ramo|ramos)\s+y\s+0\.5\b/gi,
         (_, qty: string | undefined, unit: string) => {
             const baseQuantity = qty ? parseNumeric(qty) : 1;
             return `${baseQuantity + 0.5} ${unit}`;
@@ -1179,7 +1188,7 @@ function extractStandaloneName(text: string): string | null {
     if (looksLikeAddress(text)) return null;
 
     const normalized = stripDiacritics(normalizeText(text));
-    if (/(quiero|pedido|comprar|precio|cuanto|vale|tiene|hay|agrega|agregar|carrito|repetir|kilo|kg|libra|unidad|nada mas|no mas|eso es todo|ya termine|ya esta|ya quedo|listo no mas|gracias)/.test(normalized)) {
+    if (/(quiero|pedido|comprar|precio|cuanto|vale|tiene|hay|agrega|agregar|carrito|repetir|kilo|kg|libra|unidad|botella|frasco|nada mas|no mas|eso es todo|ya termine|ya esta|ya quedo|listo no mas|gracias)/.test(normalized)) {
         return null;
     }
     if (isNewBasketChoice(text) || isRepeatOrderRequest(text) || isStartOrderIntent(text)) return null;
@@ -1193,7 +1202,7 @@ function looksLikeCatalogProductText(text: string) {
     const normalized = stripDiacritics(normalizeText(text));
     if (!normalized) return false;
 
-    if (/\b(de|lb|libras?|kilos?|kg|unidades?|unidad|und|cartones?|bidones?|canastillas?|lts?|litros?|bja|bandejas?|atados?|ramas?|ramos?)\b/.test(normalized)) {
+    if (/\b(de|lb|libras?|kilos?|kg|unidades?|unidad|und|botellas?|frascos?|cartones?|bidones?|canastillas?|lts?|litros?|bja|bandejas?|atados?|ramas?|ramos?)\b/.test(normalized)) {
         return true;
     }
 
@@ -1588,7 +1597,7 @@ function parseOrderIntent(message: string): { quantity: number | null; product: 
 
     const normalizedQuantityMessage = normalizeQuantityWords(message);
     const normalizedText = stripDiacritics(normalizeText(normalizedQuantityMessage));
-    const halfMatch = normalizedText.match(/^(?:media|medio)\s*(?:kilo|kilos|kg|libra|libras|lb|unidad|unidades|und|carton|cartones|bidon|bidones|canastilla|canastillas|lt|lts|litro|litros|bja|bandeja|bandejas|atado|atados|rama|ramas|ramo|ramos)?\s*(?:de\s+)?(.+)$/i);
+    const halfMatch = normalizedText.match(/^(?:media|medio)\s*(?:kilo|kilos|kg|libra|libras|lb|unidad|unidades|und|botella|botellas|frasco|frascos|carton|cartones|bidon|bidones|canastilla|canastillas|lt|lts|litro|litros|bja|bandeja|bandejas|atado|atados|rama|ramas|ramo|ramos)?\s*(?:de\s+)?(.+)$/i);
     if (halfMatch?.[1]) {
         const product = cleanSearchTerm(halfMatch[1]);
         if (product && !isUnitOnlyText(product)) {
@@ -1785,12 +1794,12 @@ function isLikelyAddressText(message: string) {
 
 function hasEmbeddedOrderSignal(message: string) {
     const normalized = stripDiacritics(normalizeText(message));
-    return /\b(quiero|necesito|dame|deme|me regalas|ponme|pongame|agregame|agrega|agregue|anotame|anota|llevar|pedido|libra|libras|kilo|kilos|kg|unidad|unidades|und)\b/.test(normalized);
+    return /\b(quiero|necesito|dame|deme|me regalas|ponme|pongame|agregame|agrega|agregue|anotame|anota|llevar|pedido|libra|libras|kilo|kilos|kg|unidad|unidades|und|botella|botellas|frasco|frascos)\b/.test(normalized);
 }
 
 function hasConcreteOrderDetail(message: string) {
     const normalized = stripDiacritics(normalizeText(message));
-    return /(\d+(?:[.,]\d+)?\s*(kilo|kilos|kg|libra|libras|lb|unidad|unidades|und)?\s*(de\s+)?[a-záéíóúñü]{2,}|media\s+libra\s+de|medio\s+kilo\s+de|(?:\d+\s+)?(?:libra|libras|lb|kilo|kilos|kg|unidad|unidades|und|atado|atados)\s+y\s+(?:media|medio)\s+de)/i.test(normalized);
+    return /(\d+(?:[.,]\d+)?\s*(kilo|kilos|kg|libra|libras|lb|unidad|unidades|und|botella|botellas|frasco|frascos)?\s*(de\s+)?[a-záéíóúñü]{2,}|media\s+libra\s+de|medio\s+kilo\s+de|(?:\d+\s+)?(?:libra|libras|lb|kilo|kilos|kg|unidad|unidades|und|botella|botellas|frasco|frascos|atado|atados)\s+y\s+(?:media|medio)\s+de)/i.test(normalized);
 }
 
 function isAffirmative(message: string) {
@@ -1901,7 +1910,7 @@ function parseCorrectionMessage(message: string): { from: string; to: string } |
 function cartSummary(items: CartItem[]) {
     if (items.length === 0) return "El carrito está vacío todavía.";
     const lines = items.map((i) => {
-        return `- ${i.quantity} ${formatLineUnit(i.unit)} de ${i.name} @ $${i.price} = $${i.quantity * i.price}`;
+        return `- ${i.quantity} ${formatLineUnit(i.unit, i.name, i.quantity)} de ${i.name} @ $${i.price} = $${i.quantity * i.price}`;
     });
     const total = items.reduce((acc, i) => acc + i.quantity * i.price, 0);
     return `TIRILLA DE COMPRA:\n${lines.join("\n")}\nTOTAL A PAGAR: $${total}`;
@@ -1924,7 +1933,7 @@ function minimumOrderStatusText(subtotal: number, config?: StoreConfigLike | nul
 
 function checkoutSummary(items: CartItem[], deliveryInfo: DeliveryInfo, city?: string | null, config?: StoreConfigLike | null) {
     if (items.length === 0) return "El carrito está vacío todavía.";
-    const lines = items.map((i) => `- ${i.quantity} ${formatLineUnit(i.unit)} de ${i.name} @ $${i.price} = $${i.quantity * i.price}`);
+    const lines = items.map((i) => `- ${i.quantity} ${formatLineUnit(i.unit, i.name, i.quantity)} de ${i.name} @ $${i.price} = $${i.quantity * i.price}`);
     const subtotal = merchandiseTotal(items);
     const shipping = shippingCost(items, city, config);
     const total = subtotal + shipping;
@@ -2314,7 +2323,7 @@ async function suggestAlternativesFromInventory(requested: string, cart: CartIte
                 product_id: p.id,
                 name: p.name,
                 quantity: 1,
-                unit: p.unit || "und",
+                unit: canonicalCatalogUnit(p.unit || "und", p.name),
                 price: Number(p.price || 0),
                 image: p.image || undefined
             });
@@ -2350,7 +2359,7 @@ async function buildCrossSellSuggestions(cart: CartItem[], config?: StoreConfigL
             product_id: candidate.id,
             name: candidate.name,
             quantity: 1,
-            unit: candidate.unit || "und",
+            unit: canonicalCatalogUnit(candidate.unit || "und", candidate.name),
             price: Number(candidate.price || 0),
             image: candidate.image || undefined
         });
@@ -2400,7 +2409,7 @@ async function buildDayOfWeekSuggestion(phone: string | undefined, cart: CartIte
         product_id: candidate.id,
         name: candidate.name,
         quantity: 1,
-        unit: candidate.unit || "und",
+        unit: canonicalCatalogUnit(candidate.unit || "und", candidate.name),
         price: Number(candidate.price || 0),
         image: candidate.image || undefined
     } as CartItem;
@@ -2425,7 +2434,7 @@ async function buildVerduleroRuleSuggestions(lastUserContent: string, cart: Cart
             product_id: product.id,
             name: product.name,
             quantity: 1,
-            unit: product.unit || "und",
+            unit: canonicalCatalogUnit(product.unit || "und", product.name),
             price: Number(product.price || 0),
             image: product.image || undefined
         });
@@ -2519,11 +2528,11 @@ async function resolveIntentToCartItem(intent: ParsedIntent, cart: CartItem[], c
                 product_id: exact.id,
                 name: exact.name,
                 quantity: intent.quantity,
-                unit: canonicalCatalogUnit(exact.unit || "und"),
+                unit: canonicalCatalogUnit(exact.unit || "und", exact.name),
                 price: exact.price,
                 image: exact.image || undefined
             };
-            if (requiresUnitClarification(intent.requestedUnit, exactItem.unit)) {
+            if (requiresUnitClarification(intent.requestedUnit, exactItem.unit, exactItem.name)) {
                 return {
                     item: null,
                     unitClarification: {
@@ -2586,7 +2595,7 @@ async function resolveIntentToCartItem(intent: ParsedIntent, cart: CartItem[], c
                         product_id: product.id,
                         name: product.name,
                         quantity: 1,
-                        unit: product.unit || "und",
+                        unit: canonicalCatalogUnit(product.unit || "und", product.name),
                         price: Number(product.price || 0),
                         image: product.image || undefined
                     }))
@@ -2600,11 +2609,11 @@ async function resolveIntentToCartItem(intent: ParsedIntent, cart: CartItem[], c
                 product_id: product.id,
                 name: product.name,
                 quantity: intent.quantity,
-                unit: canonicalCatalogUnit(product.unit || "und"),
+                unit: canonicalCatalogUnit(product.unit || "und", product.name),
                 price: product.price,
                 image: product.image || undefined
             };
-            if (requiresUnitClarification(intent.requestedUnit, resolvedItem.unit)) {
+            if (requiresUnitClarification(intent.requestedUnit, resolvedItem.unit, resolvedItem.name)) {
                 return {
                     item: null,
                     unitClarification: {
@@ -2938,7 +2947,7 @@ function mergeResolvedIntoDraft(
     if (resolved.length === 0) return [];
     const resolvedWithUnit = resolved.map((item) => ({
         ...item,
-        unit: item.unit || unitOverride || "und"
+        unit: canonicalCatalogUnit(item.unit || unitOverride || "und", item.name)
     }));
     draft.cart = mergeCartItems(draft.cart, resolvedWithUnit);
     return resolvedWithUnit;
@@ -2950,7 +2959,7 @@ function resolvedItemsSummary(
     notFound: string[] = []
 ) {
     if (resolved.length === 0) return "";
-    const lines = resolved.map((i) => `- ${i.quantity} ${formatLineUnit(i.unit)} de ${i.name} @ $${i.price} = $${i.quantity * i.price}`);
+    const lines = resolved.map((i) => `- ${i.quantity} ${formatLineUnit(i.unit, i.name, i.quantity)} de ${i.name} @ $${i.price} = $${i.quantity * i.price}`);
     const subtotal = resolved.reduce((acc, i) => acc + i.quantity * i.price, 0);
     const substitutionText = substitutionNotes.length > 0 ? `\nAjustes sugeridos:\n- ${substitutionNotes.join("\n- ")}` : "";
     const presentableNotFound = visibleNotFoundTerms(notFound);
@@ -3059,7 +3068,7 @@ function variantOptionsFromProducts(
                 product_id: product.id,
                 name: product.name,
                 quantity: 1,
-                unit: product.unit || "und",
+                unit: canonicalCatalogUnit(product.unit || "und", product.name),
                 price: Number(product.price || 0),
                 image: product.image || undefined
             }));
@@ -3087,7 +3096,7 @@ function extractProductFromPriceQuestion(message: string) {
     const text = stripLeadingConversationFillers(message);
     return normalizeRequestedProductTerm(text
         .replace(/(cuanto vale|precio de|a como esta|a como sale|valor de)/g, " ")
-        .replace(/\b(kilo|kilos|kg|libra|libras|lb|unidad|unidades|und|carton|cartones|bidon|bidones|canastilla|canastillas|lt|lts|litro|litros|bja|bandeja|bandejas|atado|atados|rama|ramas|ramo|ramos|de|el|la|los|las)\b/g, " ")
+        .replace(/\b(kilo|kilos|kg|libra|libras|lb|unidad|unidades|und|botella|botellas|frasco|frascos|carton|cartones|bidon|bidones|canastilla|canastillas|lt|lts|litro|litros|bja|bandeja|bandejas|atado|atados|rama|ramas|ramo|ramos|de|el|la|los|las)\b/g, " ")
         .replace(/\s+/g, " ")
         .trim());
 }
@@ -3113,7 +3122,7 @@ function extractProductFromAvailabilityQuestion(message: string) {
 
     return normalizeRequestedProductTerm(text
         .replace(/\b(que\s+(frutas|verduras|productos)\s+(tienen|hay|manejan|venden|disponibles)|que\s+\w+\s+tienes|tienes|tiene|hay|maneja|vende|cuenta con|disponible|disponibles)\b/g, " ")
-        .replace(/\b(kilo|kilos|kg|libra|libras|lb|unidad|unidades|und|carton|cartones|bidon|bidones|canastilla|canastillas|lt|lts|litro|litros|bja|bandeja|bandejas|atado|atados|rama|ramas|ramo|ramos|de|el|la|los|las)\b/g, " ")
+        .replace(/\b(kilo|kilos|kg|libra|libras|lb|unidad|unidades|und|botella|botellas|frasco|frascos|carton|cartones|bidon|bidones|canastilla|canastillas|lt|lts|litro|litros|bja|bandeja|bandejas|atado|atados|rama|ramas|ramo|ramos|de|el|la|los|las)\b/g, " ")
         .replace(/\b(que|cuales|cuáles)\b/g, " ")
         .replace(/\s+/g, " ")
         .trim());
@@ -3174,7 +3183,7 @@ async function priceReply(message: string, config?: StoreConfigLike) {
     if (!product) {
         return `${productTerm} no lo manejo en el catálogo ahorita, veci.`;
     }
-    return `Sí, claro. ${product.name}: $${product.price} por ${unitShortLabel(product.unit)}. ${unitQuantityQuestion(product.unit)}`;
+    return `Sí, claro. ${product.name}: $${product.price} por ${unitShortLabel(product.unit, product.name)}. ${unitQuantityQuestion(product.unit, product.name)}`;
 }
 
 async function availabilityReply(message: string, config?: StoreConfigLike) {
@@ -3219,7 +3228,7 @@ async function availabilityReply(message: string, config?: StoreConfigLike) {
     if (!product) {
         return `${productTerm} no lo manejo en el catálogo ahorita, veci.`;
     }
-    return `Sí, claro, sí hay ${product.name}. ${unitQuantityQuestion(product.unit)}`;
+    return `Sí, claro, sí hay ${product.name}. ${unitQuantityQuestion(product.unit, product.name)}`;
 }
 
 async function fallbackReply(lastUserMessage: string, config?: StoreConfigLike) {
@@ -3256,11 +3265,11 @@ async function fallbackReply(lastUserMessage: string, config?: StoreConfigLike) 
         if (variants.length > 0) {
             return variantPrompt(intent.product, variants);
         }
-        return `Sí hay ${product.name}. Vale $${product.price} por ${unitShortLabel(product.unit)}. ${unitQuantityQuestion(product.unit)}`;
+        return `Sí hay ${product.name}. Vale $${product.price} por ${unitShortLabel(product.unit, product.name)}. ${unitQuantityQuestion(product.unit, product.name)}`;
     }
 
     const subtotal = intent.quantity * product.price;
-    return `¡Listo, veci! Le anoto ${intent.quantity} de ${product.name}. Subtotal: $${subtotal}. ¿Qué más le pongo a la canasta?`;
+    return `¡Listo, veci! Le anoto ${intent.quantity} ${formatLineUnit(product.unit, product.name, intent.quantity)} de ${product.name}. Subtotal: $${subtotal}. ¿Qué más le pongo a la canasta?`;
 }
 
 async function executeCreateOrder(customerData: any, items: any[], total: number) {
@@ -3881,7 +3890,7 @@ export async function POST(req: Request) {
                     : null;
                 await saveDraft(sessionId, draft);
 
-                const lines = items.map((item) => `- ${item.quantity} ${formatLineUnit(item.unit)} de ${item.name} @ $${item.price} = $${item.quantity * item.price}`);
+                const lines = items.map((item) => `- ${item.quantity} ${formatLineUnit(item.unit, item.name, item.quantity)} de ${item.name} @ $${item.price} = $${item.quantity * item.price}`);
                 const subtotal = items.reduce((acc, item) => acc + (item.quantity * item.price), 0);
                 const reply = followupReply?.reply
                     ? `Listo, veci. Le agregué ${eachVariantQuantity} de cada uno:\n${lines.join("\n")}\nSubtotal de esta tanda: $${subtotal}.\n${followupReply.reply}`
@@ -3939,7 +3948,7 @@ export async function POST(req: Request) {
                                 }
                             };
                             await saveDraft(sessionId, draft);
-                            const reply = `Le cambié ${previous.name} por ${chosen.name}, veci. Ojo: ese se maneja en ${unitShortLabel(chosen.unit).toLowerCase()}, no en ${unitShortLabel(previous.unit).toLowerCase()}. ${unitQuantityQuestion(chosen.unit)}`;
+                            const reply = `Le cambié ${previous.name} por ${chosen.name}, veci. Ojo: ese se maneja en ${unitShortLabel(chosen.unit, chosen.name).toLowerCase()}, no en ${unitShortLabel(previous.unit, previous.name).toLowerCase()}. ${unitQuantityQuestion(chosen.unit, chosen.name)}`;
                             if (sessionId) {
                                 await prisma.message.create({ data: { sessionId, role: "assistant", content: reply } });
                             }
@@ -3952,7 +3961,7 @@ export async function POST(req: Request) {
                         };
                         draft.cart.splice(index, 1, replaced);
                         await saveDraft(sessionId, draft);
-                        const reply = `Listo, veci. Le cambié ${previous.name} por ${replaced.name} con ${replaced.quantity} ${formatLineUnit(replaced.unit)}. ¿Qué más necesita?`;
+                        const reply = `Listo, veci. Le cambié ${previous.name} por ${replaced.name} con ${replaced.quantity} ${formatLineUnit(replaced.unit, replaced.name, replaced.quantity)}. ¿Qué más necesita?`;
                         if (sessionId) {
                             await prisma.message.create({ data: { sessionId, role: "assistant", content: reply } });
                         }
@@ -3969,7 +3978,7 @@ export async function POST(req: Request) {
                         quantity: effectiveQuantity,
                         unit: chosen.unit
                     };
-                    if (requiresUnitClarification(effectiveRequestedUnit, item.unit)) {
+                    if (requiresUnitClarification(effectiveRequestedUnit, item.unit, item.name)) {
                         draft.pendingQuantity = null;
                         draft.pendingVariant = {
                             ...pendingVariant,
@@ -4012,8 +4021,8 @@ export async function POST(req: Request) {
                     await saveDraft(sessionId, draft);
                     const subtotal = item.quantity * item.price;
                     const reply = followupReply?.reply
-                        ? `Listo, veci. Le agregué ${item.quantity} ${formatLineUnit(item.unit)} de ${item.name} @ $${item.price} = $${subtotal}.\n${followupReply.reply}`
-                        : `Listo, veci. Le agregué ${item.quantity} ${formatLineUnit(item.unit)} de ${item.name} @ $${item.price} = $${subtotal}.\n¿Qué más necesita?`;
+                        ? `Listo, veci. Le agregué ${item.quantity} ${formatLineUnit(item.unit, item.name, item.quantity)} de ${item.name} @ $${item.price} = $${subtotal}.\n${followupReply.reply}`
+                        : `Listo, veci. Le agregué ${item.quantity} ${formatLineUnit(item.unit, item.name, item.quantity)} de ${item.name} @ $${item.price} = $${subtotal}.\n¿Qué más necesita?`;
                     if (sessionId) {
                         await prisma.message.create({ data: { sessionId, role: "assistant", content: reply } });
                     }
@@ -4027,7 +4036,7 @@ export async function POST(req: Request) {
                     }
                 };
                 await saveDraft(sessionId, draft);
-                const reply = `De una, veci. Entonces va ${chosen.name} a $${chosen.price} por ${unitShortLabel(chosen.unit)}. ${unitQuantityQuestion(chosen.unit)}`;
+                const reply = `De una, veci. Entonces va ${chosen.name} a $${chosen.price} por ${unitShortLabel(chosen.unit, chosen.name)}. ${unitQuantityQuestion(chosen.unit, chosen.name)}`;
                 if (sessionId) {
                     await prisma.message.create({ data: { sessionId, role: "assistant", content: reply } });
                 }
@@ -4042,7 +4051,7 @@ export async function POST(req: Request) {
                     draft.pendingQuantity = null;
                     await saveDraft(sessionId, draft);
                 } else {
-                    const reply = `${unitQuantityQuestion(draft.pendingQuantity.item.unit)}\nEse producto se maneja en ${unitShortLabel(draft.pendingQuantity.item.unit)}.`;
+                    const reply = `${unitQuantityQuestion(draft.pendingQuantity.item.unit, draft.pendingQuantity.item.name)}\nEse producto se maneja en ${unitShortLabel(draft.pendingQuantity.item.unit, draft.pendingQuantity.item.name)}.`;
                     if (sessionId) {
                         await prisma.message.create({ data: { sessionId, role: "assistant", content: reply } });
                     }
@@ -4064,7 +4073,7 @@ export async function POST(req: Request) {
                 await saveDraft(sessionId, draft);
 
                 const subtotal = item.quantity * item.price;
-                const reply = `Listo, veci. Le agregué ${item.quantity} ${formatLineUnit(item.unit)} de ${item.name} @ $${item.price} = $${subtotal}.\n¿Qué más necesita?`;
+                const reply = `Listo, veci. Le agregué ${item.quantity} ${formatLineUnit(item.unit, item.name, item.quantity)} de ${item.name} @ $${item.price} = $${subtotal}.\n¿Qué más necesita?`;
                 if (sessionId) {
                     await prisma.message.create({ data: { sessionId, role: "assistant", content: reply } });
                 }
@@ -4119,12 +4128,12 @@ export async function POST(req: Request) {
                 }
                 return assistantJson(reply);
             }
-            const resolvedWithUnit = resolved.map((item) => ({ ...item, unit: item.unit || "und" }));
+            const resolvedWithUnit = resolved.map((item) => ({ ...item, unit: canonicalCatalogUnit(item.unit || "und", item.name) }));
             draft.cart = [...draft.cart, ...resolvedWithUnit];
             draft.pendingUnitIntents = [];
             draft.pendingUnitChoice = null;
             await saveDraft(sessionId, draft);
-            const lines = resolvedWithUnit.map((i) => `- ${i.quantity} ${formatLineUnit(i.unit)} de ${i.name} @ $${i.price} = $${i.quantity * i.price}`);
+            const lines = resolvedWithUnit.map((i) => `- ${i.quantity} ${formatLineUnit(i.unit, i.name, i.quantity)} de ${i.name} @ $${i.price} = $${i.quantity * i.price}`);
             const subtotal = resolvedWithUnit.reduce((acc, i) => acc + i.quantity * i.price, 0);
             const presentableNotFound = visibleNotFoundTerms(notFound);
             const notFoundText = presentableNotFound.length > 0 ? `\nNo encontré: ${presentableNotFound.join(", ")}.` : "";
@@ -4186,7 +4195,7 @@ export async function POST(req: Request) {
                             }
                         };
                         await saveDraft(sessionId, draft);
-                        const reply = `Le cambié ${removed.name} por ${replacement.name}, veci. Ojo: ese se maneja en ${unitShortLabel(replacement.unit).toLowerCase()}, no en ${unitShortLabel(removed.unit).toLowerCase()}. ${unitQuantityQuestion(replacement.unit)}`;
+                        const reply = `Le cambié ${removed.name} por ${replacement.name}, veci. Ojo: ese se maneja en ${unitShortLabel(replacement.unit, replacement.name).toLowerCase()}, no en ${unitShortLabel(removed.unit, removed.name).toLowerCase()}. ${unitQuantityQuestion(replacement.unit, replacement.name)}`;
                         if (sessionId) {
                             await prisma.message.create({ data: { sessionId, role: "assistant", content: reply } });
                         }
@@ -4195,7 +4204,7 @@ export async function POST(req: Request) {
                     const replaced = { ...replacement, unit: removed.unit };
                     draft.cart.push(replaced);
                     await saveDraft(sessionId, draft);
-                    const reply = `Listo, veci. Le cambié ${removed.name} por ${replaced.name} con ${replaced.quantity} ${replaced.unit}. ¿Qué más necesita?`;
+                    const reply = `Listo, veci. Le cambié ${removed.name} por ${replaced.name} con ${replaced.quantity} ${formatLineUnit(replaced.unit, replaced.name, replaced.quantity)}. ¿Qué más necesita?`;
                     if (sessionId) {
                         await prisma.message.create({ data: { sessionId, role: "assistant", content: reply } });
                     }
@@ -4261,7 +4270,7 @@ export async function POST(req: Request) {
                     const subtotal = resolvedWithUnit.reduce((acc, item) => acc + (item.quantity * item.price), 0);
                     const presentableNotFound = visibleNotFoundTerms(notFound);
                     const notFoundText = presentableNotFound.length > 0 ? `\nNo encontré: ${presentableNotFound.join(", ")}.` : "";
-                    const reply = `Listo, veci. Reabrí el pedido y agregué esto:\n${resolvedWithUnit.map((i) => `- ${i.quantity} ${formatLineUnit(i.unit)} de ${i.name} @ $${i.price} = $${i.quantity * i.price}`).join("\n")}\nSubtotal de esta tanda: $${subtotal}.${notFoundText}\n¿Qué más necesita?`;
+                    const reply = `Listo, veci. Reabrí el pedido y agregué esto:\n${resolvedWithUnit.map((i) => `- ${i.quantity} ${formatLineUnit(i.unit, i.name, i.quantity)} de ${i.name} @ $${i.price} = $${i.quantity * i.price}`).join("\n")}\nSubtotal de esta tanda: $${subtotal}.${notFoundText}\n¿Qué más necesita?`;
                     if (sessionId) {
                         await prisma.message.create({ data: { sessionId, role: "assistant", content: reply } });
                     }
@@ -4568,8 +4577,8 @@ export async function POST(req: Request) {
                 const qtyOnly = extractQuantityUnitOnly(lastUserContent);
                 if (qtyOnly && draft.cart.length > 0) {
                     const last = draft.cart[draft.cart.length - 1];
-                    if (requiresUnitClarification(qtyOnly.unit, last.unit)) {
-                        const reply = `Ojo, veci: ${last.name} se maneja en ${unitShortLabel(last.unit).toLowerCase()}, no en ${unitShortLabel(qtyOnly.unit).toLowerCase()}. Mándemelo en ${unitAskLabel(last.unit)}, por ejemplo: \`${qtyOnly.quantity} ${unitAskLabel(last.unit)} de ${last.name}\`.`;
+                    if (requiresUnitClarification(qtyOnly.unit, last.unit, last.name)) {
+                        const reply = `Ojo, veci: ${last.name} se maneja en ${unitShortLabel(last.unit, last.name).toLowerCase()}, no en ${unitShortLabel(qtyOnly.unit).toLowerCase()}. Mándemelo en ${unitAskLabel(last.unit, last.name)}, por ejemplo: \`${qtyOnly.quantity} ${unitAskLabel(last.unit, last.name)} de ${last.name}\`.`;
                         if (sessionId) {
                             await prisma.message.create({ data: { sessionId, role: "assistant", content: reply } });
                         }
@@ -4588,7 +4597,7 @@ export async function POST(req: Request) {
                     last.quantity = qtyOnly.quantity;
                     draft.awaitingCheckoutConfirmation = false;
                     await saveDraft(sessionId, draft);
-                    const reply = `Listo, veci. Ajusté ${last.name} a ${last.quantity} ${formatLineUnit(last.unit)}. ¿Qué más necesita?`;
+                    const reply = `Listo, veci. Ajusté ${last.name} a ${last.quantity} ${formatLineUnit(last.unit, last.name, last.quantity)}. ¿Qué más necesita?`;
                     if (sessionId) {
                         await prisma.message.create({ data: { sessionId, role: "assistant", content: reply } });
                     }
@@ -4669,7 +4678,7 @@ export async function POST(req: Request) {
                     }
                     return assistantJson(reply);
                 }
-                const resolvedWithUnit = resolved.map((item) => ({ ...item, unit: canonicalCatalogUnit(item.unit || unitChoice || "und") }));
+                const resolvedWithUnit = resolved.map((item) => ({ ...item, unit: canonicalCatalogUnit(item.unit || unitChoice || "und", item.name) }));
                 draft.cart = mergeCartItems(draft.cart, resolvedWithUnit);
                 draft.pendingUnitIntents = [];
                 draft.pendingUnitChoice = null;
@@ -4687,7 +4696,7 @@ export async function POST(req: Request) {
                     return assistantJson(reply);
                 }
 
-                const lines = resolvedWithUnit.map((i) => `- ${i.quantity} ${formatLineUnit(i.unit)} de ${i.name} @ $${i.price} = $${i.quantity * i.price}`);
+                const lines = resolvedWithUnit.map((i) => `- ${i.quantity} ${formatLineUnit(i.unit, i.name, i.quantity)} de ${i.name} @ $${i.price} = $${i.quantity * i.price}`);
                 const subtotal = resolvedWithUnit.reduce((acc, i) => acc + i.quantity * i.price, 0);
                 const substitutionText = substitutionNotes.length > 0 ? `\nAjustes sugeridos:\n- ${substitutionNotes.join("\n- ")}` : "";
                 const reply = `Perfecto, veci. Ya te agregué esto:\n${lines.join("\n")}\nSubtotal de esta tanda: $${subtotal}.${substitutionText}\n¿Qué más te anoto?`;
@@ -4785,7 +4794,7 @@ export async function POST(req: Request) {
                 return assistantJson(reply);
             }
             if (resolved.length > 0) {
-                const resolvedWithUnit = resolved.map((item) => ({ ...item, unit: item.unit || "und" }));
+                const resolvedWithUnit = resolved.map((item) => ({ ...item, unit: canonicalCatalogUnit(item.unit || "und", item.name) }));
                 draft.cart = mergeCartItems(draft.cart, resolvedWithUnit);
                 draft.pendingUnitIntents = [];
                 draft.pendingUnitChoice = null;
@@ -4795,7 +4804,7 @@ export async function POST(req: Request) {
                     ? await continueFollowupIntents(draft, pendingFollowups, null, config)
                     : null;
                 await saveDraft(sessionId, draft);
-                const lines = resolvedWithUnit.map((i) => `- ${i.quantity} ${formatLineUnit(i.unit)} de ${i.name} @ $${i.price} = $${i.quantity * i.price}`);
+                const lines = resolvedWithUnit.map((i) => `- ${i.quantity} ${formatLineUnit(i.unit, i.name, i.quantity)} de ${i.name} @ $${i.price} = $${i.quantity * i.price}`);
                 const subtotal = resolvedWithUnit.reduce((acc, i) => acc + i.quantity * i.price, 0);
                 const presentableNotFound = visibleNotFoundTerms(notFound);
                 const notFoundText = presentableNotFound.length > 0 ? `\nNo encontré: ${presentableNotFound.join(", ")}.` : "";
@@ -4841,7 +4850,7 @@ export async function POST(req: Request) {
                 const products = await searchProductsByTerm(term, config);
                 const best = pickBestProduct(products, term);
                 if (best) {
-                    foundLines.push(`- ${best.name}: $${best.price} por ${unitShortLabel(best.unit)}`);
+                    foundLines.push(`- ${best.name}: $${best.price} por ${unitShortLabel(best.unit, best.name)}`);
                 } else {
                     missingTerms.push(term);
                 }
@@ -4902,13 +4911,13 @@ export async function POST(req: Request) {
                     product_id: product.id,
                     name: product.name,
                     quantity: 1,
-                    unit: product.unit || "und",
+                    unit: canonicalCatalogUnit(product.unit || "und", product.name),
                     price: product.price,
                     image: product.image || undefined
                 }
             };
             await saveDraft(sessionId, draft);
-            const reply = `Sí, claro, sí hay ${product.name} a $${product.price} por ${unitShortLabel(product.unit)}. ${unitQuantityQuestion(product.unit)}`;
+            const reply = `Sí, claro, sí hay ${product.name} a $${product.price} por ${unitShortLabel(product.unit, product.name)}. ${unitQuantityQuestion(product.unit, product.name)}`;
             if (sessionId) {
                 await prisma.message.create({ data: { sessionId, role: "assistant", content: reply } });
             }
@@ -4927,7 +4936,7 @@ export async function POST(req: Request) {
                             ...defaultVariant,
                             quantity: intents[0].quantity
                         };
-                        if (requiresUnitClarification(intents[0].requestedUnit, item.unit)) {
+                        if (requiresUnitClarification(intents[0].requestedUnit, item.unit, item.name)) {
                             draft.pendingUnitIntents = [intents[0]];
                             draft.pendingUnitChoice = intents[0].requestedUnit || null;
                             await saveDraft(sessionId, draft);
@@ -4941,7 +4950,7 @@ export async function POST(req: Request) {
                         draft.awaitingCheckoutConfirmation = false;
                         await saveDraft(sessionId, draft);
                         const subtotal = item.quantity * item.price;
-                        const reply = `Listo, veci. Le agregué ${item.quantity} ${formatLineUnit(item.unit)} de ${item.name} @ $${item.price} = $${subtotal}.\nSubtotal de esta tanda: $${subtotal}.\n¿Qué más necesita?`;
+                        const reply = `Listo, veci. Le agregué ${item.quantity} ${formatLineUnit(item.unit, item.name, item.quantity)} de ${item.name} @ $${item.price} = $${subtotal}.\nSubtotal de esta tanda: $${subtotal}.\n¿Qué más necesita?`;
                         if (sessionId) {
                             await prisma.message.create({ data: { sessionId, role: "assistant", content: reply } });
                         }
@@ -5014,7 +5023,7 @@ export async function POST(req: Request) {
             draft.pendingUnitIntents = [];
             const resolvedWithUnit = resolved.map((item) => ({
                 ...item,
-                unit: item.unit || extractUnitChoice(lastUserContent) || "und"
+                unit: canonicalCatalogUnit(item.unit || extractUnitChoice(lastUserContent) || "und", item.name)
             }));
 
             if (resolvedWithUnit.length === 0) {
@@ -5052,7 +5061,7 @@ export async function POST(req: Request) {
                 return assistantJson(reply);
             }
 
-            const lines = resolvedWithUnit.map((i) => `- ${i.quantity} ${formatLineUnit(i.unit)} de ${i.name} @ $${i.price} = $${i.quantity * i.price}`);
+            const lines = resolvedWithUnit.map((i) => `- ${i.quantity} ${formatLineUnit(i.unit, i.name, i.quantity)} de ${i.name} @ $${i.price} = $${i.quantity * i.price}`);
             const subtotal = resolvedWithUnit.reduce((acc, i) => acc + i.quantity * i.price, 0);
             const presentableNotFound = visibleNotFoundTerms(notFound);
             const notFoundText = presentableNotFound.length > 0 ? `\nNo encontré: ${presentableNotFound.join(", ")}.` : "";

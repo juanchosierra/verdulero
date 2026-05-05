@@ -73,7 +73,7 @@ export function normalizeUnitCode(raw: unknown): string {
   if (!value) return "";
   if (/(^|\b)(kg|kilo|kilos)($|\b)/.test(value)) return "kg";
   if (/(^|\b)(lb|lbr|libra|libras|livra|livras)($|\b)/.test(value)) return "lb";
-  if (/(^|\b)(und|unidad|unidades)($|\b)/.test(value)) return "und";
+  if (/(^|\b)(und|unidad|unidades|botella|botellas|frasco|frascos)($|\b)/.test(value)) return "und";
   if (/(^|\b)(carton|cartones)($|\b)/.test(value)) return "carton";
   if (/(^|\b)(bidon|bidones)($|\b)/.test(value)) return "bidon";
   if (/(^|\b)(canastilla|canastillas)($|\b)/.test(value)) return "canastilla";
@@ -81,6 +81,17 @@ export function normalizeUnitCode(raw: unknown): string {
   if (/(^|\b)(bja|bandeja|bandejas)($|\b)/.test(value)) return "bja";
   if (/(^|\b)(atado|atados|atdo|atdos|rama|ramas|ramo|ramos)($|\b)/.test(value)) return "atado";
   return "";
+}
+
+export function isPackagedVolumeUnitProduct(productName: string | null | undefined) {
+  const normalized = stripDiacritics(String(productName || "").toLowerCase());
+  if (!/\b(zumo|jugo)\b/.test(normalized)) return false;
+  return /\b(?:x\s*)?(?:4|cuatro)\s*(?:l|lt|lts|litro|litros)\b/.test(normalized);
+}
+
+export function catalogUnitForProduct(productName: string | null | undefined, unit: string | null | undefined) {
+  if (isPackagedVolumeUnitProduct(productName)) return "und";
+  return normalizeUnitCode(unit) || unit || "und";
 }
 
 export function unitLabel(unit: string) {
@@ -165,7 +176,7 @@ export function tokenizeForMatch(raw: string) {
   return normalizeForMatch(raw)
     .split(" ")
     .filter(Boolean)
-    .map((t) => t.replace(/^(kilo|kilos|kg|libra|libras|lb|unidad|unidades|und|de|el|la|los|las|marca|tipo|ref|referencia|x)$/i, ""))
+    .map((t) => t.replace(/^(kilo|kilos|kg|libra|libras|lb|unidad|unidades|und|botella|botellas|frasco|frascos|de|el|la|los|las|marca|tipo|ref|referencia|x)$/i, ""))
     .filter((t) => t.length > 1)
     .filter(Boolean);
 }
@@ -310,13 +321,14 @@ function extractUnitFromWooProduct(product: any): string {
 }
 
 function mapWooProduct(product: any): CatalogProduct {
+  const rawUnit = extractUnitFromWooProduct(product) || extractUnitFromStoreProduct(product) || "und";
   return {
     id: product.id,
     name: product.name,
     price: parseFloat(product?.prices?.regular_price || product?.regular_price || product?.prices?.price || product?.price || 0),
     stock_status: product?.stock_status || (product?.is_in_stock ? "instock" : "outofstock"),
     image: product.images?.[0]?.src || null,
-    unit: extractUnitFromWooProduct(product) || extractUnitFromStoreProduct(product) || "und"
+    unit: catalogUnitForProduct(product.name, rawUnit)
   };
 }
 

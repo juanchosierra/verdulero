@@ -124,6 +124,20 @@ function shortUnitLabel(unit: string) {
     return UNIT_LABELS[unit] || unit;
 }
 
+function isPackagedVolumeUnitProduct(productName: string | null | undefined) {
+    const normalized = String(productName || "")
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .toLowerCase();
+    if (!/\b(zumo|jugo)\b/.test(normalized)) return false;
+    return /\b(?:x\s*)?(?:4|cuatro)\s*(?:l|lt|lts|litro|litros)\b/.test(normalized);
+}
+
+function productUnitLabel(unit: string, productName?: string | null) {
+    if (isPackagedVolumeUnitProduct(productName)) return "Botella 4 L";
+    return shortUnitLabel(unit);
+}
+
 function isValidEmail(value: string) {
     return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim());
 }
@@ -1113,7 +1127,7 @@ export default function ChatPage() {
                                     <p className="text-sm font-black leading-tight text-gray-800">{product.name}</p>
                                     <p className="mt-1 text-sm font-bold text-green-700">{formatMoney(product.price)}</p>
                                     <p className="mt-1 text-[11px] font-semibold uppercase tracking-wide text-gray-400">
-                                        {shortUnitLabel(product.unit)} · {product.stock_status === "instock" ? "Disponible" : "Consultar"}
+                                        {productUnitLabel(product.unit, product.name)} · {product.stock_status === "instock" ? "Disponible" : "Consultar"}
                                     </p>
                                 </div>
                             </div>
@@ -1168,7 +1182,7 @@ export default function ChatPage() {
                                 <p className="line-clamp-2 text-[10px] font-black leading-tight text-slate-900">{featuredProduct.name}</p>
                                 <p className="mt-0.5 text-[12px] font-black text-emerald-700">{formatMoney(featuredProduct.price)}</p>
                                 <p className="mt-0.5 text-[8px] font-semibold uppercase tracking-[0.14em] text-slate-400">
-                                    {shortUnitLabel(featuredProduct.unit)} · Disponible
+                                    {productUnitLabel(featuredProduct.unit, featuredProduct.name)} · Disponible
                                 </p>
                             </div>
                         </div>
@@ -1249,7 +1263,7 @@ export default function ChatPage() {
                             </div>
                             <div className="flex-1 min-w-0">
                                 <p className="text-sm font-bold text-gray-800 leading-tight">{item.name}</p>
-                                <p className="text-xs font-semibold text-gray-500 mt-1">{formatMoney(item.price)} / {shortUnitLabel(item.unit)}</p>
+                                <p className="text-xs font-semibold text-gray-500 mt-1">{formatMoney(item.price)} / {productUnitLabel(item.unit, item.name)}</p>
                                 <p className="text-xs font-black text-primary mt-1">Subtotal: {formatMoney(item.price * item.quantity)}</p>
                             </div>
                         </div>
@@ -1888,7 +1902,7 @@ export default function ChatPage() {
                                                                 <div className="min-w-0">
                                                                     <p className="text-sm font-bold text-slate-900">{item.name}</p>
                                                                     <p className="mt-1 text-xs font-semibold text-slate-500">
-                                                                        {item.quantity} {shortUnitLabel(item.unit)} · {formatMoney(item.price)} c/u
+                                                                        {item.quantity} {productUnitLabel(item.unit, item.name)} · {formatMoney(item.price)} c/u
                                                                     </p>
                                                                 </div>
                                                                 <div className="text-sm font-black text-slate-900">

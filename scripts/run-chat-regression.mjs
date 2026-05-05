@@ -769,6 +769,27 @@ const scenarios = [
         throw new Error("No limpió el Spanglish simple del pedido.");
       }
     }
+  },
+  {
+    id: "R045",
+    name: "zumo_4_litros_es_botella",
+    bootstrapProfile: {
+      correo: "$EMAIL",
+      ciudad: "$CITY",
+      nombre: "Nora Botella"
+    },
+    steps: [
+      ["cuanto vale el zumo de limon colemon", [/(zumo|colemon|botella|unidad|opciones reales|vale|precio|\$)/i]]
+    ],
+    assert(history) {
+      const combined = history.map((h) => h.reply).join("\n");
+      if (/cu[aá]ntos\s+litros/i.test(combined)) {
+        throw new Error("Preguntó cuántos litros para un zumo embotellado de 4 litros.");
+      }
+      if (/zumo|colemon|lim[oó]n/i.test(combined) && !/(botella|unidad|unidades)/i.test(combined)) {
+        throw new Error("No explicó que el zumo de 4 litros se maneja por botella/unidad.");
+      }
+    }
   }
 ];
 
