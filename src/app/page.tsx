@@ -311,15 +311,7 @@ function renderAssistantMessage(content: string, onOptionClick?: (option: string
 }
 
 function shouldShowCheckoutDecisionButtons(content: string) {
-    const normalized = normalizeUiText(content);
-
-    return (
-        normalized.includes('si esta todo bien, confirmeme con "si" o "no"') ||
-        normalized.includes('si esta todo bien, confirmame con "si" o "no"') ||
-        normalized.includes('me confirma por favor con "si" o "no" para enviar su pedido') ||
-        normalized.includes('me confirmas por favor con "si" o "no" para enviar tu pedido') ||
-        (normalized.includes("confirm") && normalized.includes('"si" o "no"'))
-    );
+    return false;
 }
 
 function shouldShowFinalizeOrderButton(content: string) {
@@ -330,12 +322,15 @@ function shouldShowFinalizeOrderButton(content: string) {
         /quiere algo mas|quieres algo mas|algo mas para la canasta/.test(normalized);
 
     const isFinalConfirmation =
-        /tirilla de compra|resumen final|total a pagar|fecha de entrega|confirmar pedido|confirma por favor|confirmeme|confirmame|pedido confirmado|numero de orden/.test(normalized);
+        /pedido confirmado|numero de orden/.test(normalized);
+
+    const asksToFinalize =
+        /finalizar pedido|boton confirmar pedido|boton finalizar pedido|usa el boton/.test(normalized);
 
     const isProductChoice =
         /opciones reales|estas opciones|cual le doy|cual te doy|cual le anoto|cual te anoto|le sirve alguna|necesito que me diga cual/.test(normalized);
 
-    return asksForMore && !isFinalConfirmation && !isProductChoice;
+    return (asksForMore || asksToFinalize) && !isFinalConfirmation && !isProductChoice;
 }
 
 const DEFAULT_WELCOME_MESSAGE = "¡Qué tal, veci! Bienvenido a la plaza digital. Soy El Verdulero, ¿qué te vamos a poner en la canasta hoy?";
@@ -417,6 +412,7 @@ export default function ChatPage() {
     const minimumMet = minimumOrder === 0 || cartTotal >= minimumOrder;
     const freeShippingMet = freeShippingFrom === 0 || cartTotal >= freeShippingFrom;
     const freeShippingProgress = freeShippingFrom > 0 ? Math.min(100, Math.round((cartTotal / freeShippingFrom) * 100)) : 100;
+    const freeShippingMotivation = "Agrega algo más y te ahorras el domicilio.";
     const selectedCityRule = (publicConfig.ciudades || DEFAULT_CITY_RULES).find(
         (city) => city.value === normalizeCityValue(preChatForm.ciudad)
     ) || null;
@@ -1342,7 +1338,7 @@ export default function ChatPage() {
                             <p className="mt-2 text-xs font-bold text-sky-900">
                                 {freeShippingMet
                                     ? `Ya te ganaste el envío gratis desde ${formatMoney(freeShippingFrom)}.`
-                                    : `Te faltan ${formatMoney(freeShippingShortfall)} para conseguir envío gratis.`}
+                                    : `Te faltan ${formatMoney(freeShippingShortfall)} para conseguir envío gratis. ${freeShippingMotivation}`}
                             </p>
                             {selectedCityLabel && (
                                 <p className="mt-1 text-[11px] font-semibold text-sky-700">
@@ -2145,7 +2141,7 @@ export default function ChatPage() {
                                     )}
                                     {minimumMet && !freeShippingMet && freeShippingFrom > 0 && (
                                         <p className="mt-1 text-[11px] font-bold text-sky-700">
-                                            Te faltan {formatMoney(freeShippingShortfall)} para envío gratis.
+                                            Te faltan {formatMoney(freeShippingShortfall)} para envío gratis. {freeShippingMotivation}
                                         </p>
                                     )}
                                     {selectedCityLabel && (
@@ -2183,7 +2179,7 @@ export default function ChatPage() {
                                             </p>
                                         ) : (
                                             <p className="mt-1 text-sm font-black text-sky-800">
-                                                Ya cumples el mínimo. Te faltan {formatMoney(freeShippingShortfall)} para envío gratis.
+                                                Ya cumples el mínimo. Te faltan {formatMoney(freeShippingShortfall)} para envío gratis. {freeShippingMotivation}
                                             </p>
                                         )}
                                     </div>

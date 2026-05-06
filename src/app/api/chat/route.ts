@@ -3391,6 +3391,42 @@ async function executeCreateOrder(customerData: any, items: any[], total: number
     return { success: true, orderId: order.id, adminEmailSent, customerEmailSent, emailErrorCode, emailErrorMessage };
 }
 
+async function finalizeOrderFromCheckoutProfile(params: {
+    draft: DraftState;
+    profile: CustomerProfile;
+    sessionId: string | null;
+    config?: StoreConfigLike | null;
+    deliveryInfo: DeliveryInfo;
+}) {
+    const { draft, profile, sessionId, config, deliveryInfo } = params;
+    const total = merchandiseTotal(draft.cart) + shippingCost(draft.cart, profile.ciudad, config);
+    const result = await executeCreateOrder({
+        nombre: profile.nombre,
+        telefono: profile.telefono,
+        correo: profile.correo,
+        direccion: profile.direccion,
+        ciudad: profile.ciudad
+    }, draft.cart, total);
+
+    if (!(result as any)?.success) return null;
+
+    draft.cart = [];
+    draft.pending = [];
+    draft.pendingUnitIntents = [];
+    draft.awaitingCheckoutConfirmation = false;
+    draft.pendingCheckoutAfterIntake = false;
+    draft.stage = "cerrado";
+    await saveDraft(sessionId, draft);
+
+    const customerMailLine = (result as any)?.customerEmailSent && profile.correo
+        ? `Te envié la tirilla al correo ${profile.correo}.`
+        : profile.correo
+            ? `Tu pedido quedó confirmado, pero el correo no salió en este intento. Si quieres, escríbenos al WhatsApp ${getSupportWhatsapp(config)} y te ayudamos de una.`
+            : `Tu pedido quedó confirmado. Si quieres la tirilla por correo, escríbenos al WhatsApp ${getSupportWhatsapp(config)}.`;
+
+    return `¡Pedido confirmado, veci! Su orden es #${(result as any).orderId}.\nTOTAL: $${total}\n${deliveryInfo.note}\n${customerMailLine}\nSi necesita cualquier cosa, nos puede escribir al WhatsApp ${getSupportWhatsapp(config)}.\n¡Gracias por comprar con ${getStoreName(config)}!`;
+}
+
 export async function POST(req: Request) {
     try {
         const rate = checkRateLimit(req, "chat", 45, 60_000);
@@ -3621,6 +3657,33 @@ export async function POST(req: Request) {
             await persistCustomerProfile(sessionId, profile);
         }
 
+        if (checkoutProfile) {
+            if (draft.cart.length === 0) {
+                const reply = "Veci, su carrito está vacío todavía. Dígame qué le anoto y cerramos el pedido de una.";
+                if (sessionId) {
+                    await prisma.message.create({ data: { sessionId, role: "assistant", content: reply } });
+                }
+                return assistantJson(reply);
+            }
+
+            const missingForCheckout = firstMissingField(profile);
+            if (missingForCheckout) {
+                const reply = `${fieldQuestion(missingForCheckout)}\nNecesito ese dato para confirmar su pedido.`;
+                if (sessionId) {
+                    await prisma.message.create({ data: { sessionId, role: "assistant", content: reply } });
+                }
+                return assistantJson(reply);
+            }
+
+            const reply = await finalizeOrderFromCheckoutProfile({ draft, profile, sessionId, config, deliveryInfo });
+            if (reply) {
+                if (sessionId) {
+                    await prisma.message.create({ data: { sessionId, role: "assistant", content: reply } });
+                }
+                return assistantJson(reply);
+            }
+        }
+
         const shouldBypassIntake = Boolean(draft.intakeCompleted || (returningContext?.customer && hasInitialProfile(profile)));
         const missingBefore = firstMissingInitialField(profile);
         const capturedPhoneNow = directCapturedFields.includes("telefono");
@@ -3714,9 +3777,9 @@ export async function POST(req: Request) {
             }
 
             draft.pendingCheckoutAfterIntake = false;
-            draft.awaitingCheckoutConfirmation = true;
+            draft.awaitingCheckoutConfirmation = false;
             await saveDraft(sessionId, draft);
-            const reply = `Perfecto, veci. Ya tengo todo para despacho:\n${checkoutSummary(draft.cart, deliveryInfo, profile.ciudad, config)}\nSi está todo bien, confírmeme con "sí" o "no".`;
+            const reply = `Perfecto, veci. Ya tengo todo para despacho:\n${checkoutSummary(draft.cart, deliveryInfo, profile.ciudad, config)}\nPara cerrar, usa el botón "Finalizar pedido" y acepta el tratamiento de datos según Habeas Data.`;
             if (sessionId) {
                 await prisma.message.create({ data: { sessionId, role: "assistant", content: reply } });
             }
@@ -4279,43 +4342,11 @@ export async function POST(req: Request) {
             }
 
             if (isAffirmative(lastUserContent)) {
-                const missing = firstMissingCheckoutField(profile);
-                if (missing) {
-                    const reply = `${fieldQuestion(missing)}\nNecesito ese dato para confirmar su pedido.`;
-                    if (sessionId) {
-                        await prisma.message.create({ data: { sessionId, role: "assistant", content: reply } });
-                    }
-                    return assistantJson(reply);
+                const reply = `Para confirmar el pedido, usa el botón "Finalizar pedido" y acepta el tratamiento de datos según la Ley de Habeas Data de Colombia. Por seguridad ya no cierro pedidos solo con "sí" en el chat.`;
+                if (sessionId) {
+                    await prisma.message.create({ data: { sessionId, role: "assistant", content: reply } });
                 }
-
-                const total = merchandiseTotal(draft.cart) + shippingCost(draft.cart, profile.ciudad, config);
-                const result = await executeCreateOrder({
-                    nombre: profile.nombre,
-                    telefono: profile.telefono,
-                    correo: profile.correo,
-                    direccion: profile.direccion,
-                    ciudad: profile.ciudad
-                }, draft.cart, total);
-
-                if ((result as any)?.success) {
-                    draft.cart = [];
-                    draft.pending = [];
-                    draft.pendingUnitIntents = [];
-                    draft.awaitingCheckoutConfirmation = false;
-                    draft.pendingCheckoutAfterIntake = false;
-                    draft.stage = "cerrado";
-                    await saveDraft(sessionId, draft);
-                    const customerMailLine = (result as any)?.customerEmailSent && profile.correo
-                        ? `Te envié la tirilla al correo ${profile.correo}.`
-                        : profile.correo
-                            ? `Tu pedido quedó confirmado, pero el correo no salió en este intento. Si quieres, escríbenos al WhatsApp ${getSupportWhatsapp(config)} y te ayudamos de una.`
-                            : `Tu pedido quedó confirmado. Si quieres la tirilla por correo, escríbenos al WhatsApp ${getSupportWhatsapp(config)}.`;
-                    const reply = `¡Pedido confirmado, veci! Su orden es #${(result as any).orderId}.\nTOTAL: $${total}\n${deliveryInfo.note}\n${customerMailLine}\nSi necesita cualquier cosa, nos puede escribir al WhatsApp ${getSupportWhatsapp(config)}.\n¡Gracias por comprar con ${getStoreName(config)}!`;
-                    if (sessionId) {
-                        await prisma.message.create({ data: { sessionId, role: "assistant", content: reply } });
-                    }
-                    return assistantJson(reply);
-                }
+                return assistantJson(reply);
             }
 
             if (isNegative(lastUserContent)) {
@@ -4328,7 +4359,7 @@ export async function POST(req: Request) {
                 return assistantJson(reply);
             }
 
-            const reply = `¿Me confirma por favor con "sí" o "no" para enviar su pedido?\n${deliveryInfo.note}`;
+            const reply = `Para enviar su pedido, use el botón "Finalizar pedido" y acepte el tratamiento de datos según Habeas Data.\n${deliveryInfo.note}`;
             if (sessionId) {
                 await prisma.message.create({ data: { sessionId, role: "assistant", content: reply } });
             }
@@ -4541,10 +4572,10 @@ export async function POST(req: Request) {
                 return assistantJson(reply);
             }
 
-            draft.awaitingCheckoutConfirmation = true;
+            draft.awaitingCheckoutConfirmation = false;
             draft.pendingCheckoutAfterIntake = false;
             await saveDraft(sessionId, draft);
-            const reply = `Perfecto, veci. Este es el resumen final:\n${checkoutSummary(draft.cart, deliveryInfo, profile.ciudad, config)}\nSi está todo bien, confírmeme con "sí" o "no".`;
+            const reply = `Perfecto, veci. Este es el resumen final:\n${checkoutSummary(draft.cart, deliveryInfo, profile.ciudad, config)}\nPara cerrar, usa el botón "Finalizar pedido" y acepta el tratamiento de datos según Habeas Data.`;
             if (sessionId) {
                 await prisma.message.create({ data: { sessionId, role: "assistant", content: reply } });
             }
