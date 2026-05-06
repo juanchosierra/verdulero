@@ -27,12 +27,15 @@ export async function GET(req: Request) {
                     reportsAnalyzed: true,
                     messagesAnalyzed: true,
                     suggestionsCreated: true,
+                    findings: true,
                     createdAt: true
                 }
             })
         ]);
 
-        return NextResponse.json({ rules, runs });
+        const latestInsights = (runs[0]?.findings as any)?.insights || null;
+
+        return NextResponse.json({ rules, runs, insights: latestInsights });
     } catch (error) {
         console.error("Learning GET error:", error);
         return NextResponse.json({ error: "No pude cargar el centro de aprendizaje." }, { status: 500 });
@@ -50,7 +53,8 @@ export async function POST(req: Request) {
             run: result.run,
             reportsAnalyzed: result.reportsAnalyzed,
             messagesAnalyzed: result.messagesAnalyzed,
-            suggestionsCreated: result.suggestions.length
+            suggestionsCreated: result.suggestions.length,
+            insights: result.insights
         });
     } catch (error) {
         console.error("Learning POST error:", error);
@@ -83,4 +87,3 @@ export async function PATCH(req: Request) {
         return NextResponse.json({ error: "No pude actualizar la regla aprendida." }, { status: 500 });
     }
 }
-

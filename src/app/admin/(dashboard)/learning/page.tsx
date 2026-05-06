@@ -2,7 +2,7 @@
 
 import type { ReactNode } from "react";
 import { useEffect, useMemo, useState } from "react";
-import { BrainCircuit, Loader2, Sparkles, CheckCircle2, Ban, RefreshCcw } from "lucide-react";
+import { BrainCircuit, Loader2, Sparkles, CheckCircle2, Ban, RefreshCcw, MessageCircle, PackageSearch, AlertTriangle, HelpCircle, ShoppingBasket } from "lucide-react";
 
 type LearnedRule = {
     id: string;
@@ -21,7 +21,25 @@ type LearningRun = {
     reportsAnalyzed: number;
     messagesAnalyzed: number;
     suggestionsCreated: number;
+    findings?: unknown;
     createdAt: string;
+};
+
+type InsightBucket = {
+    label: string;
+    count: number;
+    samples: string[];
+};
+
+type LearningInsights = {
+    generatedAt: string;
+    products: InsightBucket[];
+    complaints: InsightBucket[];
+    questions: InsightBucket[];
+    intents: InsightBucket[];
+    notFound: InsightBucket[];
+    checkoutSignals: InsightBucket[];
+    privacy?: string;
 };
 
 const STATUS_STYLES: Record<string, string> = {
@@ -36,6 +54,7 @@ export default function AdminLearningPage() {
     const [loading, setLoading] = useState(true);
     const [running, setRunning] = useState(false);
     const [updatingId, setUpdatingId] = useState<string | null>(null);
+    const [insights, setInsights] = useState<LearningInsights | null>(null);
 
     const loadData = async () => {
         try {
@@ -44,6 +63,7 @@ export default function AdminLearningPage() {
             if (!data.error) {
                 setRules(Array.isArray(data.rules) ? data.rules : []);
                 setRuns(Array.isArray(data.runs) ? data.runs : []);
+                setInsights(data.insights || null);
             }
         } catch (error) {
             console.error(error);
@@ -94,8 +114,8 @@ export default function AdminLearningPage() {
     };
 
     return (
-        <div className="h-screen overflow-hidden bg-slate-50 p-6">
-            <div className="mx-auto flex h-full max-w-7xl flex-col">
+        <div className="min-h-screen bg-slate-50 p-6">
+            <div className="mx-auto flex max-w-7xl flex-col">
                 <div className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm">
                     <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
                         <div>
@@ -123,6 +143,43 @@ export default function AdminLearningPage() {
                     <MiniStat icon={<CheckCircle2 size={18} />} label="Aprobadas" value={stats.approved} tone="emerald" />
                     <MiniStat icon={<Ban size={18} />} label="Desactivadas" value={stats.disabled} tone="slate" />
                 </div>
+
+                <section className="mt-5 rounded-[2rem] border border-slate-200 bg-white p-5 shadow-sm">
+                    <div className="flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
+                        <div>
+                            <p className="text-[11px] font-black uppercase tracking-[0.22em] text-emerald-700">Insights de conversaciones</p>
+                            <h2 className="mt-2 text-xl font-black text-slate-900">Qué están pidiendo, preguntando y reportando</h2>
+                        </div>
+                        {insights?.generatedAt && (
+                            <p className="text-[11px] font-bold text-slate-400">
+                                Actualizado {new Date(insights.generatedAt).toLocaleString("es-CO")}
+                            </p>
+                        )}
+                    </div>
+
+                    {insights ? (
+                        <>
+                            <div className="mt-5 grid gap-4 lg:grid-cols-3">
+                                <InsightCard icon={<PackageSearch size={18} />} title="Productos mencionados" items={insights.products} />
+                                <InsightCard icon={<AlertTriangle size={18} />} title="Quejas y fricciones" items={insights.complaints} />
+                                <InsightCard icon={<HelpCircle size={18} />} title="Preguntas frecuentes" items={insights.questions} />
+                                <InsightCard icon={<MessageCircle size={18} />} title="Intenciones detectadas" items={insights.intents} />
+                                <InsightCard icon={<PackageSearch size={18} />} title="No encontrados" items={insights.notFound} />
+                                <InsightCard icon={<ShoppingBasket size={18} />} title="Señales de cierre" items={insights.checkoutSignals} />
+                            </div>
+                            {insights.privacy && (
+                                <p className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-xs font-semibold text-slate-500">
+                                    {insights.privacy}
+                                </p>
+                            )}
+                        </>
+                    ) : (
+                        <div className="mt-5 rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-8 text-center">
+                            <BrainCircuit className="mx-auto h-7 w-7 text-slate-300" />
+                            <p className="mt-3 text-sm font-black text-slate-500">Ejecuta aprendizaje para generar el primer tablero de conversaciones.</p>
+                        </div>
+                    )}
+                </section>
 
                 <div className="mt-5 grid min-h-0 flex-1 gap-5 xl:grid-cols-[1.1fr_0.9fr]">
                     <section className="min-h-0 space-y-4 overflow-hidden">
@@ -263,6 +320,36 @@ function Metric({ label, value }: { label: string; value: number }) {
         <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
             <p className="text-[10px] font-black uppercase tracking-[0.16em] text-slate-500">{label}</p>
             <p className="mt-2 text-xl font-black text-slate-900">{value}</p>
+        </div>
+    );
+}
+
+function InsightCard({ icon, title, items }: { icon: ReactNode; title: string; items: InsightBucket[] }) {
+    return (
+        <div className="rounded-[1.5rem] border border-slate-200 bg-slate-50/70 p-4">
+            <div className="flex items-center gap-3">
+                <div className="rounded-2xl bg-white p-3 text-emerald-700 shadow-sm">{icon}</div>
+                <p className="text-[11px] font-black uppercase tracking-[0.16em] text-slate-600">{title}</p>
+            </div>
+            {items.length === 0 ? (
+                <p className="mt-4 text-sm font-semibold text-slate-400">Sin señales todavía.</p>
+            ) : (
+                <div className="mt-4 space-y-3">
+                    {items.slice(0, 5).map((item) => (
+                        <div key={item.label} className="rounded-2xl bg-white p-3 shadow-sm">
+                            <div className="flex items-center justify-between gap-3">
+                                <p className="text-sm font-black text-slate-900">{item.label}</p>
+                                <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-[10px] font-black text-emerald-700">{item.count}</span>
+                            </div>
+                            {item.samples?.[0] && (
+                                <p className="mt-2 line-clamp-2 text-xs font-semibold leading-relaxed text-slate-500">
+                                    {item.samples[0]}
+                                </p>
+                            )}
+                        </div>
+                    ))}
+                </div>
+            )}
         </div>
     );
 }
