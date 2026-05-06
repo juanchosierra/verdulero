@@ -17,7 +17,7 @@ import {
     productCandidates as sharedProductCandidates
 } from "@/lib/catalog";
 import { buildCatalogSystemContext } from "@/lib/ai-context";
-import { loadApprovedLearnedRules } from "@/lib/learning";
+import { loadApprovedLearnedRules, redactSensitiveText } from "@/lib/learning";
 import { buildOrderEmailHtml, buildOrderEmailText, formatCop } from "@/lib/order-email";
 import { buildDeliverySchedule } from "@/lib/delivery";
 import {
@@ -2516,6 +2516,56 @@ async function saveDraft(sessionId: string | null, state: DraftState) {
     });
 }
 
+async function recordLearningEvent(params: {
+    sessionId: string | null;
+    userMessage: string;
+    assistantText: string;
+    profile: CustomerProfile;
+    draft: DraftState;
+    contract: AssistantContract;
+}) {
+    if (!params.sessionId || !params.userMessage || !params.assistantText) return;
+
+    try {
+        const cartTotal = params.draft.cart.reduce((sum, item) => sum + item.price * item.quantity, 0);
+        await prisma.learningEvent.create({
+            data: {
+                id: `le_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`,
+                sessionId: params.sessionId,
+                buyerName: params.profile.nombre || null,
+                userMessage: redactSensitiveText(params.userMessage),
+                assistantText: redactSensitiveText(params.assistantText),
+                action: params.contract.intent,
+                extractedEntities: JSON.stringify({
+                    fields_detected: params.contract.fields_detected,
+                    items: params.contract.items,
+                    next_action: params.contract.next_action
+                }),
+                stateSnapshot: JSON.stringify({
+                    stage: params.contract.stage,
+                    cartCount: params.draft.cart.length,
+                    cartTotal,
+                    pendingCount: params.draft.pending.length,
+                    pendingUnitCount: params.draft.pendingUnitIntents?.length || 0,
+                    hasPendingVariant: Boolean(params.draft.pendingVariant),
+                    hasPendingQuantity: Boolean(params.draft.pendingQuantity),
+                    awaitingRepeatChoice: Boolean(params.draft.awaitingRepeatChoice),
+                    pendingCheckoutAfterIntake: Boolean(params.draft.pendingCheckoutAfterIntake),
+                    awaitingCheckoutConfirmation: Boolean(params.draft.awaitingCheckoutConfirmation),
+                    profileComplete: hasCompleteProfile(params.profile)
+                }),
+                recommendations: JSON.stringify({
+                    next_action: params.contract.next_action,
+                    shouldEscalate: /error|enredo|no entiende|no puedo|no deja/i.test(params.userMessage),
+                    shouldReviewNotFound: /no encontr[ée]|no tengo|no manejo|no aparece|no existe/i.test(params.assistantText)
+                })
+            }
+        });
+    } catch (error) {
+        console.warn("Learning event skipped:", error);
+    }
+}
+
 async function resolveIntentToCartItem(intent: ParsedIntent, cart: CartItem[], config?: StoreConfigLike): Promise<IntentResolution> {
     const normalizedProductTerm = normalizeRequestedProductTerm(intent.product);
     const products = await searchProductsByTerm(normalizedProductTerm, config);
@@ -3536,6 +3586,14 @@ export async function POST(req: Request) {
                 profile: bootProfile,
                 draft
             });
+            await recordLearningEvent({
+                sessionId,
+                userMessage: "__bootstrap__",
+                assistantText: reply,
+                profile: bootProfile,
+                draft,
+                contract
+            });
 
             return NextResponse.json({ content: reply, role: "assistant", contract });
         }
@@ -3625,7 +3683,7 @@ export async function POST(req: Request) {
             .filter((f) => Boolean(extractFieldValue(f, lastUserContent)));
         const draft = await loadDraft(sessionId);
         draft.stage = deriveSalesStage(profile, draft);
-        const assistantJson = (replyText: string) => {
+        const assistantJson = async (replyText: string) => {
             const contract = buildAssistantContract({
                 userText: lastUserContent,
                 reply: replyText,
@@ -3633,6 +3691,14 @@ export async function POST(req: Request) {
                 draft
             });
             draft.stage = contract.stage;
+            await recordLearningEvent({
+                sessionId,
+                userMessage: lastUserContent,
+                assistantText: replyText,
+                profile,
+                draft,
+                contract
+            });
             return NextResponse.json({ content: replyText, role: "assistant", contract });
         };
         let returningContext: ReturningContext | null = null;
@@ -5119,6 +5185,14 @@ export async function POST(req: Request) {
                 profile,
                 draft
             });
+            await recordLearningEvent({
+                sessionId,
+                userMessage: lastUserContent,
+                assistantText: reply,
+                profile,
+                draft,
+                contract
+            });
             return NextResponse.json({ content: reply, role: "assistant", contract });
         }
 
@@ -5205,6 +5279,14 @@ export async function POST(req: Request) {
                 data: { sessionId, role: "assistant", content: safeReply }
             });
         }
+        await recordLearningEvent({
+            sessionId,
+            userMessage: lastUserContent,
+            assistantText: safeReply,
+            profile,
+            draft,
+            contract
+        });
 
         return NextResponse.json({ content: safeReply, role: "assistant", contract });
 

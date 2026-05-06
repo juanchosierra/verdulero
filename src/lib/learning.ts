@@ -25,6 +25,27 @@ type ErrorLearningReport = {
     conversationSlice: string;
 };
 
+async function loadRecentLearningEventMessages(): Promise<ConversationMessage[]> {
+    try {
+        const events = await prisma.learningEvent.findMany({
+            orderBy: { createdAt: "desc" },
+            take: 500,
+            select: {
+                userMessage: true,
+                assistantText: true
+            }
+        });
+
+        return events.flatMap((event) => [
+            { role: "user", content: event.userMessage },
+            { role: "assistant", content: event.assistantText }
+        ]);
+    } catch (error) {
+        console.warn("Learning events unavailable:", error);
+        return [];
+    }
+}
+
 const PRODUCT_HINTS = [
     "aguacate", "tomate", "papa", "cebolla", "zanahoria", "limon", "cilantro", "perejil",
     "pimenton", "lechuga", "pepino", "banano", "manzana", "mango", "pina", "fresa",
@@ -49,7 +70,7 @@ function normalizeText(raw: string) {
         .trim();
 }
 
-function redactSensitiveText(raw: string) {
+export function redactSensitiveText(raw: string) {
     return raw
         .replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi, "[correo]")
         .replace(/\b3\d{9}\b/g, "[telefono]")
@@ -361,7 +382,7 @@ export async function loadApprovedLearnedRules() {
 }
 
 export async function runLearningAnalysis() {
-    const [reports, messages] = await Promise.all([
+    const [reports, messages, eventMessages] = await Promise.all([
         prisma.errorReport.findMany({
             where: { status: "resuelto" },
             orderBy: { createdAt: "desc" },
@@ -371,12 +392,14 @@ export async function runLearningAnalysis() {
             orderBy: { createdAt: "desc" },
             take: 1000,
             select: { role: true, content: true }
-        })
+        }),
+        loadRecentLearningEventMessages()
     ]);
+    const allMessages = [...messages, ...eventMessages];
 
     const suggestions = [
         ...buildErrorDrivenSuggestions(reports),
-        ...buildConversationDrivenSuggestions(messages)
+        ...buildConversationDrivenSuggestions(allMessages)
     ];
 
     const merged = new Map<string, LearningSuggestion>();
@@ -394,11 +417,11 @@ export async function runLearningAnalysis() {
     const finalSuggestions = Array.from(merged.values())
         .sort((a, b) => b.sampleCount - a.sampleCount)
         .slice(0, 25);
-    const insights = buildConversationInsights(messages, reports);
+    const insights = buildConversationInsights(allMessages, reports);
 
     const created = await upsertLearningSuggestions(finalSuggestions);
 
-    const summary = `Analicé ${reports.length} reportes y ${messages.length} mensajes. Generé ${finalSuggestions.length} reglas sugeridas y actualicé el tablero de insights.`;
+    const summary = `Analicé ${reports.length} reportes, ${messages.length} mensajes y ${eventMessages.length} señales estructuradas. Generé ${finalSuggestions.length} reglas sugeridas y actualicé el tablero de insights.`;
     const runRows = await prisma.$queryRawUnsafe<Array<{
         id: string;
         summary: string;
@@ -415,7 +438,7 @@ export async function runLearningAnalysis() {
         summary,
         JSON.stringify({ topRules: finalSuggestions.slice(0, 10), insights }),
         reports.length,
-        messages.length,
+        allMessages.length,
         finalSuggestions.length
     );
     const run = runRows[0];
@@ -423,7 +446,7 @@ export async function runLearningAnalysis() {
     return {
         run,
         reportsAnalyzed: reports.length,
-        messagesAnalyzed: messages.length,
+        messagesAnalyzed: allMessages.length,
         suggestions: finalSuggestions,
         insights
     };
