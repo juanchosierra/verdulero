@@ -7,6 +7,20 @@ import { buildOrderEmailHtml, buildOrderEmailText, formatCop } from '@/lib/order
 import { buildDeliverySchedule } from '@/lib/delivery';
 import { calculateShippingAmount, minimumOrderThreshold } from '@/lib/store-rules';
 
+const MAX_ORDER_ITEM_QUANTITY = 500;
+const MAX_ORDER_ITEM_SUBTOTAL = 5_000_000;
+
+function areOrderItemsPlausible(items: any[]) {
+    return items.every((item) => {
+        const quantity = Number(item?.quantity || 0);
+        const price = Number(item?.price || 0);
+        if (!Number.isFinite(quantity) || quantity <= 0 || quantity > MAX_ORDER_ITEM_QUANTITY) return false;
+        if (!Number.isFinite(price) || price < 0) return false;
+        if (quantity * price > MAX_ORDER_ITEM_SUBTOTAL) return false;
+        return true;
+    });
+}
+
 export async function POST(req: Request) {
     try {
         if (process.env.NODE_ENV === "production" && process.env.ENABLE_PUBLIC_ORDER_API !== "true") {
@@ -27,6 +41,9 @@ export async function POST(req: Request) {
         }
         if (!Array.isArray(items) || items.length === 0) {
             return NextResponse.json({ error: "Order items required" }, { status: 400 });
+        }
+        if (!areOrderItemsPlausible(items)) {
+            return NextResponse.json({ error: "Order items out of allowed range" }, { status: 400 });
         }
         const subtotal = items.reduce((acc: number, item: any) => acc + (Number(item.quantity || 0) * Number(item.price || 0)), 0);
         if (!Number.isFinite(subtotal) || subtotal <= 0) {

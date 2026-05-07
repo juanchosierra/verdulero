@@ -35,6 +35,8 @@ const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 const ANTHROPIC_MODEL = process.env.ANTHROPIC_MODEL || "claude-3-5-sonnet-latest";
 const GREETING = "¡Veci, mucho gusto tenerle por acá! Soy El Verdulero.";
 const DEFAULT_SUPPORT_WHATSAPP = "573176778089";
+const MAX_ORDER_ITEM_QUANTITY = 500;
+const MAX_ORDER_ITEM_SUBTOTAL = 5_000_000;
 
 const DEFAULT_SYSTEM_PROMPT = `ROL: Eres "El Verdulero", el asistente experto y carismático de una tienda de frutas y verduras frescas en línea. Tu objetivo es tomar pedidos de forma eficiente, amable y sin errores. Hablas con la calidez de un tendero de confianza: cercano, servicial, conocedor de la calidad del campo, pero siempre profesional.
 
@@ -274,6 +276,12 @@ type ReturningContext = {
         lastCity?: string | null;
     } | null;
     lastItems: CartItem[];
+    recentOrders: Array<{
+        id: number;
+        createdAt: Date;
+        total: number;
+        items: CartItem[];
+    }>;
 };
 
 let runtimeCityRules = DEFAULT_CITY_RULES;
@@ -1019,6 +1027,21 @@ function parseNumeric(value: string) {
     return Number.isFinite(n) ? n : 0;
 }
 
+function isPlausibleOrderQuantity(quantity: number) {
+    return Number.isFinite(quantity) && quantity > 0 && quantity <= MAX_ORDER_ITEM_QUANTITY;
+}
+
+function areOrderItemsPlausible(items: any[]) {
+    return items.every((item) => {
+        const quantity = Number(item?.quantity || 0);
+        const price = Number(item?.price || 0);
+        if (!isPlausibleOrderQuantity(quantity)) return false;
+        if (!Number.isFinite(price) || price < 0) return false;
+        if (quantity * price > MAX_ORDER_ITEM_SUBTOTAL) return false;
+        return true;
+    });
+}
+
 function extractCompositeQuantity(text: string): number | null {
     const normalized = normalizeQuantityWords(stripDiacritics(normalizeText(text)));
     const units = "(?:kilo|kilos|kg|libra|libras|lb|unidad|unidades|und|botella|botellas|frasco|frascos|carton|cartones|bidon|bidones|canastilla|canastillas|lt|lts|litro|litros|bja|bandeja|bandejas|atado|atados|rama|ramas|ramo|ramos)";
@@ -1593,6 +1616,8 @@ function parseOrderIntent(message: string): { quantity: number | null; product: 
     if (parseRemoveItemMessage(message)) return null;
     if ((isStartOrderIntent(message) || isResumePreviousRequestIntent(message)) && !hasConcreteOrderDetail(message)) return null;
     if (isNewBasketChoice(message) && !hasConcreteOrderDetail(message)) return null;
+    if ((isAffirmative(message) || isNegative(message)) && !hasConcreteOrderDetail(message)) return null;
+    if ((isDoneOrderingIntent(message) || isCheckoutIntent(message)) && !hasConcreteOrderDetail(message)) return null;
     if (isGreetingMessage(message) && !hasConcreteOrderDetail(message)) return null;
 
     const normalizedQuantityMessage = normalizeQuantityWords(message);
@@ -1621,6 +1646,7 @@ function parseOrderIntent(message: string): { quantity: number | null; product: 
         const qtyFromVerb = remainder.match(/(\d+(?:[.,]\d+)?)\s+(.+)/);
         if (qtyFromVerb) {
             const quantity = parseNumeric(qtyFromVerb[1]);
+            if (!isPlausibleOrderQuantity(quantity)) return null;
             const rawProduct = normalizeRequestedProductTerm(qtyFromVerb[2]
                 .replace(/^(kilos?|kg|libras?|lb|unidades?|unidad|unds?|und|cartones?|bidones?|canastillas?|lts?|litros?|bja|bandejas?|atados?|ramas?|ramos?)\s*(de)?\s*/i, "")
                 .replace(/^de\s+/i, "")
@@ -1651,6 +1677,7 @@ function parseOrderIntent(message: string): { quantity: number | null; product: 
     const qtyAndProduct = clean.match(/^(\d+(?:[.,]\d+)?)\s+(.+)/);
     if (qtyAndProduct) {
         const quantity = parseNumeric(qtyAndProduct[1]);
+        if (!isPlausibleOrderQuantity(quantity)) return null;
         const rawProduct = normalizeRequestedProductTerm(qtyAndProduct[2]
             .replace(/^(kilos?|kg|libras?|lb|unidades?|unidad|unds?|und|cartones?|bidones?|canastillas?|lts?|litros?|bja|bandejas?|atados?|ramas?|ramos?)\s*(de)?\s*/i, "")
             .replace(/^de\s+/i, "")
@@ -1665,7 +1692,7 @@ function parseOrderIntent(message: string): { quantity: number | null; product: 
     if (trailingQty?.[1] && trailingQty?.[2]) {
         const quantity = parseNumeric(trailingQty[2]);
         const product = normalizeRequestedProductTerm(trailingQty[1]);
-        if (quantity > 0 && product && !isUnitOnlyText(product)) {
+        if (isPlausibleOrderQuantity(quantity) && product && !isUnitOnlyText(product)) {
             return { quantity, product, requestedUnit: extractRequestedUnit(trailingQty[3]) };
         }
     }
@@ -1698,6 +1725,8 @@ function parseMultipleOrderIntents(message: string): ParsedIntent[] {
     if (isLikelyAddressText(message) && !hasEmbeddedOrderSignal(message)) return [];
     if (parseRemoveItemMessage(message)) return [];
     if ((isStartOrderIntent(message) || isResumePreviousRequestIntent(message)) && !hasConcreteOrderDetail(message)) return [];
+    if ((isAffirmative(message) || isNegative(message)) && !hasConcreteOrderDetail(message)) return [];
+    if ((isDoneOrderingIntent(message) || isCheckoutIntent(message)) && !hasConcreteOrderDetail(message)) return [];
 
     const normalizedMessage = collapseCompositeQuantityPhrases(normalizeQuantityWords(message));
     const cleaned = cleanSearchTerm(normalizedMessage);
@@ -1746,7 +1775,7 @@ function parseMultipleOrderIntents(message: string): ParsedIntent[] {
                 .replace(/\s+/g, " ")
                 .trim();
 
-            if (!quantity || quantity <= 0 || !product || isUnitOnlyText(product)) continue;
+            if (!isPlausibleOrderQuantity(quantity) || !product || isUnitOnlyText(product)) continue;
             const alternatives = product.includes(" y ")
                 ? product.split(/\s+y\s+/).map((p) => p.trim()).filter((p) => p.length > 2)
                 : [product];
@@ -1804,7 +1833,7 @@ function hasConcreteOrderDetail(message: string) {
 
 function isAffirmative(message: string) {
     const text = stripDiacritics(cleanSearchTerm(message));
-    return /^(si|ok|dale|hagale|de una|correcto|confirmo|confirmar)\b/i.test(text);
+    return /^(si|ok|dale|hagale|de una|correcto|confirmo|confirmar|igual|asi mismo|tal cual)\b/i.test(text);
 }
 
 function isNegative(message: string) {
@@ -1814,7 +1843,7 @@ function isNegative(message: string) {
 
 function isRepeatOrderRequest(message: string) {
     const text = stripDiacritics(cleanSearchTerm(message));
-    return /(repetir|lo mismo|pedido anterior|mercar lo anterior|ultima compra|ultima vez|otra vez|de nuevo|eche otra vez|hagalo otra vez|hagal[oó] de nuevo)/.test(text);
+    return /(repetir|lo mismo|igual|tal cual|asi mismo|pedido anterior|mercado anterior|mercar lo anterior|ultima compra|ultimo mercado|ultima vez|otra vez|de nuevo|eche otra vez|hagalo otra vez|hagal[oó] de nuevo)/.test(text);
 }
 
 function isNewBasketChoice(message: string) {
@@ -1844,7 +1873,7 @@ function isCheckoutIntent(message: string) {
 
 function isDoneOrderingIntent(message: string) {
     const text = stripDiacritics(cleanSearchTerm(message));
-    return /(no mas|nada mas|eso es todo|eso seria todo|ya termine|ya esta|ya quedo|listo no mas)/.test(text);
+    return /\b(no mas|nada mas|es todo|eso es todo|seria todo|eso seria todo|ya termine|ya terminamos|ya esta|ya quedo|listo|listo no mas|asi esta bien|con eso)\b/.test(text);
 }
 
 function isGratitudeOnly(message: string) {
@@ -1946,6 +1975,30 @@ function compactItems(items: CartItem[]) {
     return items.map((i) => `${i.quantity} x ${i.name}`).join(", ");
 }
 
+function repeatMarketPreview(items: CartItem[], city?: string | null, config?: StoreConfigLike | null) {
+    if (items.length === 0) return "No hay productos en ese mercado anterior.";
+    const lines = items.map((i) => `- ${i.quantity} ${formatLineUnit(i.unit, i.name, i.quantity)} de ${i.name} @ $${i.price} = $${i.quantity * i.price}`);
+    const subtotal = merchandiseTotal(items);
+    const shipping = shippingCost(items, city, config);
+    const total = subtotal + shipping;
+    const shippingLine = shipping === 0 ? "Envío estimado: GRATIS" : `Envío estimado: $${shipping}`;
+    const minimumLine = minimumOrderStatusText(subtotal, config);
+    return `${lines.join("\n")}\nSubtotal actualizado: $${subtotal}\n${shippingLine}${minimumLine ? `\n${minimumLine}` : ""}\nTotal estimado: $${total}`;
+}
+
+function repeatMarketPrompt(items: CartItem[], city?: string | null, config?: StoreConfigLike | null, intro = "Te puedo ahorrar tiempo repitiendo tu último mercado con precios actualizados de hoy.") {
+    return `${intro}\n${repeatMarketPreview(items, city, config)}\n¿Lo agrego igual al carrito? También puedes decir: "quítale tomate", "agrégale 2 libras de papa" o "hagamos uno nuevo".`;
+}
+
+function removeFromItems(items: CartItem[], productTerm: string) {
+    const removeTokens = tokenizeForMatch(productTerm);
+    const index = items.findIndex((item) => hasTokenMatch(item.name, removeTokens));
+    if (index < 0) return null;
+    const next = [...items];
+    const [removed] = next.splice(index, 1);
+    return { removed, items: next };
+}
+
 function cartHasProductTerm(cart: CartItem[], term: string) {
     const queryTokens = tokenizeForMatch(term);
     if (queryTokens.length === 0) return false;
@@ -1964,6 +2017,8 @@ function visibleNotFoundTerms(terms: string[]) {
     return terms.filter((term) => {
         const normalized = normalizeForMatch(term);
         if (!normalized) return false;
+        const tokens = tokenizeForMatch(term);
+        if (tokens.length === 0 || tokens.every((token) => token.length <= 1)) return false;
         if (/^(script|alert|onclick|onerror|style|div|span|html|body)$/.test(normalized)) return false;
         return true;
     });
@@ -2223,20 +2278,47 @@ function normalizeOrderItems(raw: unknown): CartItem[] {
         .filter((i) => i.name && i.quantity > 0 && i.price >= 0);
 }
 
-async function getReturningContext(phone: string): Promise<ReturningContext> {
+async function refreshHistoricalItems(items: CartItem[], config?: StoreConfigLike): Promise<CartItem[]> {
+    const refreshed = await Promise.all(items.map(async (item) => {
+        const byId = item.product_id ? await executeGetProductById(item.product_id, config) : null;
+        const live = byId || pickBestProduct(await searchProductsByTerm(item.name, config), item.name);
+        if (!live) return item;
+        return {
+            ...item,
+            product_id: Number(live.id || item.product_id),
+            name: live.name || item.name,
+            unit: canonicalCatalogUnit(live.unit || item.unit || "und", live.name || item.name),
+            price: Number(live.price || item.price || 0),
+            image: live.image || item.image
+        };
+    }));
+
+    return refreshed.filter((item) => item.product_id && item.name && item.quantity > 0);
+}
+
+async function getReturningContext(phone: string, config?: StoreConfigLike): Promise<ReturningContext> {
     const customer = await prisma.customer.findUnique({ where: { phone } });
-    const lastOrder = await prisma.order.findFirst({
+    const recentOrdersRaw = await prisma.order.findMany({
         where: { customerPhone: phone },
-        orderBy: { createdAt: "desc" }
+        orderBy: { createdAt: "desc" },
+        take: 3
     });
 
-    let lastItems: CartItem[] = [];
-    if (lastOrder?.items) {
+    const recentOrders = [];
+    for (const order of recentOrdersRaw) {
+        let items: CartItem[] = [];
         try {
-            lastItems = normalizeOrderItems(JSON.parse(lastOrder.items));
+            items = normalizeOrderItems(JSON.parse(order.items));
         } catch {
-            lastItems = [];
+            items = [];
         }
+        const refreshedItems = await refreshHistoricalItems(items, config);
+        recentOrders.push({
+            id: order.id,
+            createdAt: order.createdAt,
+            total: Number(order.total || 0),
+            items: refreshedItems
+        });
     }
 
     return {
@@ -2248,11 +2330,12 @@ async function getReturningContext(phone: string): Promise<ReturningContext> {
                 lastCity: customer.lastCity
             }
             : null,
-        lastItems
+        lastItems: recentOrders[0]?.items || [],
+        recentOrders
     };
 }
 
-async function getReturningContextByEmail(email: string): Promise<ReturningContext> {
+async function getReturningContextByEmail(email: string, config?: StoreConfigLike): Promise<ReturningContext> {
     const customer = await prisma.customer.findFirst({
         where: {
             email: {
@@ -2263,7 +2346,7 @@ async function getReturningContextByEmail(email: string): Promise<ReturningConte
     });
 
     if (customer) {
-        return getReturningContext(customer.phone);
+        return getReturningContext(customer.phone, config);
     }
 
     const recentSession = await prisma.chatSession.findFirst({
@@ -2285,7 +2368,7 @@ async function getReturningContextByEmail(email: string): Promise<ReturningConte
     });
 
     if (!recentSession?.customerName) {
-        return { customer: null, lastItems: [] };
+        return { customer: null, lastItems: [], recentOrders: [] };
     }
 
     return {
@@ -2295,7 +2378,8 @@ async function getReturningContextByEmail(email: string): Promise<ReturningConte
             lastAddress: recentSession.customerAddress || null,
             lastCity: recentSession.customerCity || null
         },
-        lastItems: []
+        lastItems: [],
+        recentOrders: []
     };
 }
 
@@ -2924,7 +3008,7 @@ function assistantAskedToConfirmPending(messages: ChatMessage[]) {
     const lastAssistant = [...messages].reverse().find((msg) => msg.role === "assistant");
     if (!lastAssistant?.content) return false;
     const text = stripDiacritics(cleanSearchTerm(lastAssistant.content));
-    return /(me confirma con si para agregar|la agrego al carrito con si|se lo agrego al carrito con si|le agrego alguno|le agrego (?:una|uno|ese|esa)|confirmado y agregado)/.test(text);
+    return /(me confirma con si para agregar|lo agrego igual al carrito|la agrego al carrito con si|se lo agrego al carrito con si|le agrego alguno|le agrego (?:una|uno|ese|esa)|confirmado y agregado)/.test(text);
 }
 
 function assistantAskedRepeatChoice(messages: ChatMessage[]) {
@@ -3323,6 +3407,13 @@ async function fallbackReply(lastUserMessage: string, config?: StoreConfigLike) 
 }
 
 async function executeCreateOrder(customerData: any, items: any[], total: number) {
+    if (!Array.isArray(items) || items.length === 0 || !areOrderItemsPlausible(items)) {
+        return {
+            success: false,
+            error: "El pedido trae cantidades fuera de rango. Revísalo antes de confirmar."
+        };
+    }
+
     const config = await prisma.storeConfig.findFirst() as StoreConfigLike | null;
     syncRuntimeCityRules(config);
     const subtotal = merchandiseTotal(items);
@@ -3537,7 +3628,7 @@ export async function POST(req: Request) {
                 );
             }
 
-            const returningByEmail = await getReturningContextByEmail(email);
+            const returningByEmail = await getReturningContextByEmail(email, config);
             const knownCustomer = returningByEmail.customer;
             const selectedCity = bootstrapProfile?.ciudad ? sanitizeCity(bootstrapProfile.ciudad) || undefined : undefined;
             const resolvedCity = selectedCity || (knownCustomer?.lastCity ? sanitizeCity(knownCustomer.lastCity) || undefined : undefined);
@@ -3572,8 +3663,11 @@ export async function POST(req: Request) {
             await saveDraft(sessionId, draft);
 
             const firstName = firstNameOf(bootProfile.nombre) || "veci";
+            const lastMarketText = draft.awaitingRepeatChoice
+                ? repeatMarketPrompt(returningByEmail.lastItems, bootProfile.ciudad, config, `¡Qué bueno verte de nuevo, ${firstName}! Ya te reconocí por tu correo y encontré tu último mercado.`)
+                : "";
             const reply = draft.awaitingRepeatChoice
-                ? `¡Qué bueno verte de nuevo, ${firstName}! Ya te reconocí por tu correo. ¿Quieres repetir tu mercado anterior o armamos uno nuevo?`
+                ? lastMarketText
                 : `¡Listo, ${firstName}! Ya guardé tu correo y que te entregamos en ${cityLabel(bootProfile.ciudad)}. Ahora sí, ¿qué te anoto en tu pedido de hoy?`;
 
             await prisma.message.create({
@@ -3704,7 +3798,7 @@ export async function POST(req: Request) {
         let returningContext: ReturningContext | null = null;
 
         if (profile.telefono) {
-            const returning = await getReturningContext(profile.telefono);
+            const returning = await getReturningContext(profile.telefono, config);
             if (returning.customer) {
                 returningContext = returning;
                 const trustedReturningName = sanitizeName(returning.customer.name || "");
@@ -3843,9 +3937,9 @@ export async function POST(req: Request) {
             }
 
             draft.pendingCheckoutAfterIntake = false;
-            draft.awaitingCheckoutConfirmation = false;
+            draft.awaitingCheckoutConfirmation = true;
             await saveDraft(sessionId, draft);
-            const reply = `Perfecto, veci. Ya tengo todo para despacho:\n${checkoutSummary(draft.cart, deliveryInfo, profile.ciudad, config)}\nPara cerrar, usa el botón "Finalizar pedido" y acepta el tratamiento de datos según Habeas Data.`;
+            const reply = `Perfecto, veci. Ya tengo todo para despacho:\n${checkoutSummary(draft.cart, deliveryInfo, profile.ciudad, config)}\nConfírmeme con "sí" para crear el pedido o use el botón "Finalizar pedido" para cerrarlo.`;
             if (sessionId) {
                 await prisma.message.create({ data: { sessionId, role: "assistant", content: reply } });
             }
@@ -3873,16 +3967,15 @@ export async function POST(req: Request) {
                 draft.awaitingRepeatChoice = false;
 
                 const returning = profile.correo
-                    ? await getReturningContextByEmail(profile.correo)
+                    ? await getReturningContextByEmail(profile.correo, config)
                     : profile.telefono
-                        ? await getReturningContext(profile.telefono)
-                        : { customer: null, lastItems: [] };
+                        ? await getReturningContext(profile.telefono, config)
+                        : { customer: null, lastItems: [], recentOrders: [] };
 
                 if (returning.lastItems.length > 0) {
                     draft.pending = returning.lastItems;
                     await saveDraft(sessionId, draft);
-                    const subtotal = returning.lastItems.reduce((acc, i) => acc + i.quantity * i.price, 0);
-                    const reply = `De una, veci. Te propongo repetir: ${compactItems(returning.lastItems)}. Subtotal: $${subtotal}. ¿Me confirmas con "sí" para agregarlo al carrito?`;
+                    const reply = repeatMarketPrompt(returning.lastItems, profile.ciudad, config, "De una, veci. Te propongo repetir este mercado con precios actualizados de hoy.");
                     if (sessionId) {
                         await prisma.message.create({ data: { sessionId, role: "assistant", content: reply } });
                     }
@@ -4408,7 +4501,17 @@ export async function POST(req: Request) {
             }
 
             if (isAffirmative(lastUserContent)) {
-                const reply = `Para confirmar el pedido, usa el botón "Finalizar pedido" y acepta el tratamiento de datos según la Ley de Habeas Data de Colombia. Por seguridad ya no cierro pedidos solo con "sí" en el chat.`;
+                const missing = firstMissingField(profile);
+                if (missing) {
+                    const reply = `${fieldQuestion(missing)}\nNecesito ese dato para confirmar su pedido.`;
+                    if (sessionId) {
+                        await prisma.message.create({ data: { sessionId, role: "assistant", content: reply } });
+                    }
+                    return assistantJson(reply);
+                }
+
+                const reply = await finalizeOrderFromCheckoutProfile({ draft, profile, sessionId, config, deliveryInfo })
+                    || "No pude confirmar el pedido en este momento. Revise los datos e inténtelo de nuevo.";
                 if (sessionId) {
                     await prisma.message.create({ data: { sessionId, role: "assistant", content: reply } });
                 }
@@ -4522,14 +4625,13 @@ export async function POST(req: Request) {
 
         if (isRepeatOrderRequest(lastUserContent) && (profile.correo || profile.telefono)) {
             const returning = profile.correo
-                ? await getReturningContextByEmail(profile.correo)
-                : await getReturningContext(profile.telefono as string);
+                ? await getReturningContextByEmail(profile.correo, config)
+                : await getReturningContext(profile.telefono as string, config);
             if (returning.lastItems.length > 0) {
                 draft.pending = returning.lastItems;
                 draft.awaitingRepeatChoice = false;
                 await saveDraft(sessionId, draft);
-                const subtotal = returning.lastItems.reduce((acc, i) => acc + i.quantity * i.price, 0);
-                const reply = `De una, veci. Te propongo repetir: ${compactItems(returning.lastItems)}. Subtotal: $${subtotal}. ¿Me confirmas con "sí" para agregarlo al carrito?`;
+                const reply = repeatMarketPrompt(returning.lastItems, profile.ciudad, config, "De una, veci. Te propongo repetir este mercado con precios actualizados de hoy.");
                 if (sessionId) {
                     await prisma.message.create({ data: { sessionId, role: "assistant", content: reply } });
                 }
@@ -4547,6 +4649,133 @@ export async function POST(req: Request) {
             if (!pendingCanBeConfirmed) {
                 draft.pending = [];
                 await saveDraft(sessionId, draft);
+            }
+
+            if (pendingCanBeConfirmed) {
+                if (isNewBasketChoice(lastUserContent)) {
+                    draft.pending = [];
+                    resetDraftForFreshBasket(draft);
+                    await saveDraft(sessionId, draft);
+                    const reply = "De una, veci. Dejamos ese mercado anterior quieto y armamos uno nuevo. ¿Qué te anoto primero?";
+                    if (sessionId) {
+                        await prisma.message.create({ data: { sessionId, role: "assistant", content: reply } });
+                    }
+                    return assistantJson(reply);
+                }
+
+                const removePendingRequest = isLastItemRemoveRequest(lastUserContent)
+                    ? { product: draft.pending[draft.pending.length - 1]?.name || "" }
+                    : parseRemoveItemMessage(lastUserContent);
+                if (removePendingRequest?.product) {
+                    const removedPending = removeFromItems(draft.pending, removePendingRequest.product);
+                    if (removedPending) {
+                        draft.pending = removedPending.items;
+                        await saveDraft(sessionId, draft);
+                        const reply = draft.pending.length > 0
+                            ? `Listo, veci. Le quité ${removedPending.removed.name}. Así queda el mercado anterior ajustado:\n${repeatMarketPreview(draft.pending, profile.ciudad, config)}\n¿Lo agrego igual al carrito?`
+                            : `Listo, veci. Le quité ${removedPending.removed.name} y ese mercado quedó vacío. ¿Armamos uno nuevo?`;
+                        if (sessionId) {
+                            await prisma.message.create({ data: { sessionId, role: "assistant", content: reply } });
+                        }
+                        return assistantJson(reply);
+                    }
+
+                    const reply = `No veo ${removePendingRequest.product} en ese mercado anterior, veci. Así está ahora:\n${repeatMarketPreview(draft.pending, profile.ciudad, config)}\nPuedes decirme qué quitar o confirmar con "sí".`;
+                    if (sessionId) {
+                        await prisma.message.create({ data: { sessionId, role: "assistant", content: reply } });
+                    }
+                    return assistantJson(reply);
+                }
+
+                const pendingCorrection = parseCorrectionMessage(lastUserContent);
+                if (pendingCorrection) {
+                    const removedPending = removeFromItems(draft.pending, pendingCorrection.from);
+                    if (removedPending) {
+                        const { resolved, notFound, ambiguous, unitClarification, quantityRestriction } = await resolveIntents(
+                            [{ quantity: removedPending.removed.quantity, product: pendingCorrection.to, requestedUnit: removedPending.removed.unit }],
+                            [...draft.cart, ...removedPending.items],
+                            config
+                        );
+                        if (ambiguous) {
+                            const reply = `${variantPrompt(ambiguous.searchTerm, ambiguous.options)}\nLe estoy cambiando ${removedPending.removed.name}; dígame cuál opción quiere y lo ajusto.`;
+                            if (sessionId) {
+                                await prisma.message.create({ data: { sessionId, role: "assistant", content: reply } });
+                            }
+                            return assistantJson(reply);
+                        }
+                        if (unitClarification) {
+                            const reply = unitClarificationReply(unitClarification.intent, unitClarification.item);
+                            if (sessionId) {
+                                await prisma.message.create({ data: { sessionId, role: "assistant", content: reply } });
+                            }
+                            return assistantJson(reply);
+                        }
+                        if (quantityRestriction) {
+                            const reply = quantityRestrictionReply(quantityRestriction.intent, quantityRestriction.item);
+                            if (sessionId) {
+                                await prisma.message.create({ data: { sessionId, role: "assistant", content: reply } });
+                            }
+                            return assistantJson(reply);
+                        }
+                        if (resolved.length > 0) {
+                            draft.pending = mergeCartItems(removedPending.items, resolved);
+                            await saveDraft(sessionId, draft);
+                            const reply = `Listo, veci. Cambié ${removedPending.removed.name} por ${resolved[0].name}. Así queda actualizado:\n${repeatMarketPreview(draft.pending, profile.ciudad, config)}\n¿Lo agrego igual al carrito?`;
+                            if (sessionId) {
+                                await prisma.message.create({ data: { sessionId, role: "assistant", content: reply } });
+                            }
+                            return assistantJson(reply);
+                        }
+
+                        const presentableNotFound = visibleNotFoundTerms(notFound);
+                        const reply = `No encontré ${presentableNotFound[0] || pendingCorrection.to} para hacer ese cambio. El mercado sigue así:\n${repeatMarketPreview(draft.pending, profile.ciudad, config)}`;
+                        if (sessionId) {
+                            await prisma.message.create({ data: { sessionId, role: "assistant", content: reply } });
+                        }
+                        return assistantJson(reply);
+                    }
+                }
+
+                const pendingAdditions = parseMultipleOrderIntents(lastUserContent);
+                if (pendingAdditions.length > 0 && !isAffirmative(lastUserContent)) {
+                    const { resolved, notFound, substitutionNotes, ambiguous, unitClarification, quantityRestriction } = await resolveIntents(
+                        pendingAdditions,
+                        [...draft.cart, ...draft.pending],
+                        config
+                    );
+                    if (ambiguous) {
+                        const reply = `${variantPrompt(ambiguous.searchTerm, ambiguous.options)}\nApenas me digas cuál, lo sumamos al mercado anterior.`;
+                        if (sessionId) {
+                            await prisma.message.create({ data: { sessionId, role: "assistant", content: reply } });
+                        }
+                        return assistantJson(reply);
+                    }
+                    if (unitClarification) {
+                        const reply = unitClarificationReply(unitClarification.intent, unitClarification.item);
+                        if (sessionId) {
+                            await prisma.message.create({ data: { sessionId, role: "assistant", content: reply } });
+                        }
+                        return assistantJson(reply);
+                    }
+                    if (quantityRestriction) {
+                        const reply = quantityRestrictionReply(quantityRestriction.intent, quantityRestriction.item);
+                        if (sessionId) {
+                            await prisma.message.create({ data: { sessionId, role: "assistant", content: reply } });
+                        }
+                        return assistantJson(reply);
+                    }
+                    if (resolved.length > 0) {
+                        draft.pending = mergeCartItems(draft.pending, resolved);
+                        await saveDraft(sessionId, draft);
+                        const adjustmentNote = substitutionNotes.length > 0 ? `\nAjuste: ${substitutionNotes.join(" ")}` : "";
+                        const missingText = visibleNotFoundTerms(notFound).length > 0 ? `\nNo encontré: ${visibleNotFoundTerms(notFound).join(", ")}.` : "";
+                        const reply = `Listo, veci. Le sumé ${compactItems(resolved)} al mercado anterior.${adjustmentNote}${missingText}\nAsí queda:\n${repeatMarketPreview(draft.pending, profile.ciudad, config)}\n¿Lo agrego igual al carrito?`;
+                        if (sessionId) {
+                            await prisma.message.create({ data: { sessionId, role: "assistant", content: reply } });
+                        }
+                        return assistantJson(reply);
+                    }
+                }
             }
 
             if (isAffirmative(lastUserContent)) {
@@ -4638,10 +4867,10 @@ export async function POST(req: Request) {
                 return assistantJson(reply);
             }
 
-            draft.awaitingCheckoutConfirmation = false;
+            draft.awaitingCheckoutConfirmation = true;
             draft.pendingCheckoutAfterIntake = false;
             await saveDraft(sessionId, draft);
-            const reply = `Perfecto, veci. Este es el resumen final:\n${checkoutSummary(draft.cart, deliveryInfo, profile.ciudad, config)}\nPara cerrar, usa el botón "Finalizar pedido" y acepta el tratamiento de datos según Habeas Data.`;
+            const reply = `Perfecto, veci. Este es el resumen final:\n${checkoutSummary(draft.cart, deliveryInfo, profile.ciudad, config)}\nConfírmeme con "sí" para crear el pedido o use el botón "Finalizar pedido" para cerrarlo.`;
             if (sessionId) {
                 await prisma.message.create({ data: { sessionId, role: "assistant", content: reply } });
             }

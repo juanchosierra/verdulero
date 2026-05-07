@@ -110,7 +110,7 @@ export default function ReportsPage() {
     );
   }
 
-  const totals = stats?.totals || { salesToday: 0, sales: 0, pending: 0, chats: 0, orders: 0, conversion: 0, completed: 0 };
+  const totals = stats?.totals || { salesToday: 0, sales: 0, pending: 0, chats: 0, orders: 0, conversion: 0, completed: 0, excludedOrders: 0 };
   const chart = stats?.chart || [];
   const reports = stats?.reports || {};
   const operations = stats?.operations || {};
@@ -160,7 +160,7 @@ export default function ReportsPage() {
           <StatMiniCard label="Ventas hoy" value={`$${(totals.salesToday || 0).toLocaleString()}`} icon={<ShoppingBasket className="text-emerald-600" />} helper={`${totals.orders || 0} pedidos creados`} />
           <StatMiniCard label="Conversión" value={`${totals.conversion}%`} icon={<TrendingUp className="text-blue-600" />} helper={`${totals.completed || 0} pedidos completados`} />
           <StatMiniCard label="Chats activos" value={String(totals.chats || 0)} icon={<MessageSquare className="text-purple-600" />} helper={`${totals.pending || 0} pedidos pendientes`} />
-          <StatMiniCard label="Ventas acumuladas" value={`$${(totals.sales || 0).toLocaleString()}`} icon={<ShieldCheck className="text-orange-600" />} helper="Total histórico guardado" />
+          <StatMiniCard label="Ventas acumuladas" value={`$${(totals.sales || 0).toLocaleString()}`} icon={<ShieldCheck className="text-orange-600" />} helper={`${totals.excludedOrders || 0} pedido(s) anómalos excluidos`} />
         </section>
 
         <section className="grid grid-cols-1 gap-8 lg:grid-cols-12">
@@ -440,7 +440,7 @@ function StatMiniCard({ label, value, icon, helper }: any) {
           {icon}
         </div>
         <div className="rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1 text-[10px] font-black uppercase text-slate-500 shadow-sm">
-          Real
+          Validado
         </div>
       </div>
       <div className="space-y-4">

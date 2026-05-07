@@ -270,14 +270,20 @@ function extractUnitFromStoreProduct(product: any): string {
   return "";
 }
 
-async function fetchStoreApiProducts(config: StoreConfigLike | undefined, page: number) {
+async function fetchStoreApiProducts(config: StoreConfigLike | undefined, page: number, forceRefresh = false) {
   const url = new URL(`${storeBaseUrl(config)}/wp-json/wc/store/v1/products`);
   url.searchParams.set("page", String(page));
   url.searchParams.set("per_page", "100");
-  const response = await fetch(url.toString(), {
-    headers: { Accept: "application/json" },
-    next: { revalidate: 60 }
-  });
+  const fetchOptions: RequestInit & { next?: { revalidate: number } } = {
+    headers: { Accept: "application/json" }
+  };
+  if (forceRefresh) {
+    fetchOptions.cache = "no-store";
+  } else {
+    fetchOptions.next = { revalidate: SNAPSHOT_TTL_MS / 1000 };
+  }
+
+  const response = await fetch(url.toString(), fetchOptions);
   if (!response.ok) {
     throw new Error(`Store API error ${response.status}`);
   }
@@ -344,7 +350,7 @@ export async function fetchCatalogSnapshot(config?: StoreConfigLike, forceRefres
   const merged: any[] = [];
   const seen = new Set<number>();
   for (const page of [1, 2, 3]) {
-    const data = await fetchStoreApiProducts(config, page);
+    const data = await fetchStoreApiProducts(config, page, forceRefresh);
     const rows = Array.isArray(data) ? data : [];
     if (rows.length === 0) break;
     for (const p of rows) {

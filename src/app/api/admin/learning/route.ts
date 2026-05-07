@@ -33,7 +33,9 @@ export async function GET(req: Request) {
             })
         ]);
 
-        const latestInsights = (runs[0]?.findings as any)?.insights || null;
+        const latestInsights = runs
+            .map((run) => (run.findings as any)?.insights)
+            .find(Boolean) || null;
 
         return NextResponse.json({ rules, runs, insights: latestInsights });
     } catch (error) {
@@ -48,9 +50,32 @@ export async function POST(req: Request) {
 
     try {
         const result = await runLearningAnalysis();
+        const rules = await prisma.learnedRule.findMany({
+            orderBy: [
+                { status: "asc" },
+                { sampleCount: "desc" },
+                { createdAt: "desc" }
+            ]
+        });
+        const runs = await prisma.learningRun.findMany({
+            take: 20,
+            orderBy: { createdAt: "desc" },
+            select: {
+                id: true,
+                summary: true,
+                reportsAnalyzed: true,
+                messagesAnalyzed: true,
+                suggestionsCreated: true,
+                findings: true,
+                createdAt: true
+            }
+        });
+
         return NextResponse.json({
             ok: true,
             run: result.run,
+            rules,
+            runs,
             reportsAnalyzed: result.reportsAnalyzed,
             messagesAnalyzed: result.messagesAnalyzed,
             suggestionsCreated: result.suggestions.length,

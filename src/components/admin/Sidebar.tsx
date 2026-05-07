@@ -18,13 +18,15 @@ import {
     MessagesSquare,
     Boxes,
     Menu,
-    X
+    X,
+    UsersRound
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const menuItems = [
     { icon: LayoutDashboard, label: "Resumen", href: "/admin" },
     { icon: ShoppingCart, label: "Pedidos", href: "/admin/orders" },
+    { icon: UsersRound, label: "Clientes", href: "/admin/customers" },
     { icon: PackageSearch, label: "Productos", href: "/admin/products" },
     { icon: Boxes, label: "Inventario", href: "/admin/inventory" },
     { icon: MessagesSquare, label: "Atención WhatsApp", href: "/admin/whatsapp" },

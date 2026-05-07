@@ -431,10 +431,12 @@ export default function ChatPage() {
         };
     }, []);
 
-    const loadCart = async (sid: string) => {
+    const loadCart = async (sid: string, forceRefresh = false) => {
         try {
             setCartLoading(true);
-            const res = await fetch(`/api/cart?sessionId=${sid}`);
+            const params = new URLSearchParams({ sessionId: sid });
+            if (forceRefresh) params.set("forceRefresh", "1");
+            const res = await fetch(`/api/cart?${params.toString()}`);
             const data = await res.json();
             if (res.ok) {
                 setCartItems(Array.isArray(data.items) ? data.items : []);
@@ -787,7 +789,7 @@ export default function ChatPage() {
                 ciudad: preChatForm.ciudad || prev.ciudad
             }));
             await animateAssistantMessage(assistantReply);
-            await loadCart(sessionId);
+            await loadCart(sessionId, true);
         } catch (error) {
             console.error("Pre-chat bootstrap error:", error);
             setPreChatError("Se me enredó el registro inicial. Intentemos otra vez.");
@@ -809,7 +811,7 @@ export default function ChatPage() {
         await Promise.all([
             loadProducts(productSearch, true),
             loadFeaturedProduct(true),
-            loadCart(resumeCandidate.sessionId)
+            loadCart(resumeCandidate.sessionId, true)
         ]);
     };
 

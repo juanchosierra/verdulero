@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import WooCommerceRestApi from "@woocommerce/woocommerce-rest-api";
+import { fetchCatalogSnapshot, type CatalogProduct } from "@/lib/catalog";
 
 type CartItem = {
     product_id: number;
@@ -27,6 +28,7 @@ async function loadState(sessionId: string): Promise<DraftState> {
     try {
         const parsed = JSON.parse(draft.data || "{}");
         return {
+            ...parsed,
             cart: Array.isArray(parsed.cart) ? parsed.cart : [],
             pending: Array.isArray(parsed.pending) ? parsed.pending : []
         };
@@ -67,6 +69,50 @@ function total(items: CartItem[]) {
     return items.reduce((acc, item) => acc + item.quantity * item.price, 0);
 }
 
+function refreshItemsFromCatalog(items: CartItem[], catalogById: Map<number, CatalogProduct>) {
+    let changed = false;
+    const refreshed = items.map((item) => {
+        const liveProduct = catalogById.get(Number(item.product_id));
+        if (!liveProduct) return item;
+
+        const nextItem = {
+            ...item,
+            name: liveProduct.name || item.name,
+            price: Number(liveProduct.price || 0),
+            unit: liveProduct.unit || item.unit,
+            image: liveProduct.image || item.image
+        };
+
+        if (
+            nextItem.name !== item.name ||
+            nextItem.price !== item.price ||
+            nextItem.unit !== item.unit ||
+            nextItem.image !== item.image
+        ) {
+            changed = true;
+        }
+
+        return nextItem;
+    });
+
+    return { items: refreshed, changed };
+}
+
+async function refreshStateFromCatalog(state: DraftState, forceRefresh: boolean) {
+    if (state.cart.length === 0 && state.pending.length === 0) return false;
+
+    const config = await prisma.storeConfig.findFirst();
+    const snapshot = await fetchCatalogSnapshot(config || undefined, forceRefresh);
+    const catalogById = new Map(snapshot.map((product) => [Number(product.id), product]));
+    const cart = refreshItemsFromCatalog(state.cart, catalogById);
+    const pending = refreshItemsFromCatalog(state.pending, catalogById);
+
+    state.cart = cart.items;
+    state.pending = pending.items;
+
+    return cart.changed || pending.changed;
+}
+
 function buildWooClient(config?: { wcUrl?: string | null; wcConsumerKey?: string | null; wcConsumerSecret?: string | null }) {
     return new WooCommerceRestApi({
         url: config?.wcUrl || process.env.NEXT_PUBLIC_WC_URL || "https://elverdulero.com.co",
@@ -79,11 +125,19 @@ function buildWooClient(config?: { wcUrl?: string | null; wcConsumerKey?: string
 export async function GET(request: Request) {
     const { searchParams } = new URL(request.url);
     const sessionId = searchParams.get("sessionId");
+    const forceRefresh = searchParams.get("forceRefresh") === "1";
     if (!sessionId) {
         return NextResponse.json({ error: "sessionId is required" }, { status: 400 });
     }
 
     const state = await loadState(sessionId);
+    let didRefreshCatalog = false;
+    try {
+        didRefreshCatalog = await refreshStateFromCatalog(state, forceRefresh);
+    } catch (error) {
+        console.error("Cart catalog refresh error:", error);
+    }
+
     const needsImage = state.cart.filter((i) => !i.image);
     if (needsImage.length > 0) {
         try {
@@ -106,10 +160,14 @@ export async function GET(request: Request) {
                 ...item,
                 image: item.image || imageMap.get(item.product_id)
             }));
-            await saveState(sessionId, state);
+            didRefreshCatalog = true;
         } catch {
             // Ignore image enrichment failures.
         }
+    }
+
+    if (didRefreshCatalog) {
+        await saveState(sessionId, state);
     }
 
     return NextResponse.json({

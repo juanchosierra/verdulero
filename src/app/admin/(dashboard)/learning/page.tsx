@@ -55,11 +55,15 @@ export default function AdminLearningPage() {
     const [running, setRunning] = useState(false);
     const [updatingId, setUpdatingId] = useState<string | null>(null);
     const [insights, setInsights] = useState<LearningInsights | null>(null);
+    const [statusMessage, setStatusMessage] = useState<string | null>(null);
+    const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
     const loadData = async () => {
         try {
+            setErrorMessage(null);
             const res = await fetch("/api/admin/learning");
             const data = await res.json();
+            if (!res.ok || data.error) throw new Error(data.error || "No pude cargar aprendizaje.");
             if (!data.error) {
                 setRules(Array.isArray(data.rules) ? data.rules : []);
                 setRuns(Array.isArray(data.runs) ? data.runs : []);
@@ -67,6 +71,7 @@ export default function AdminLearningPage() {
             }
         } catch (error) {
             console.error(error);
+            setErrorMessage(error instanceof Error ? error.message : "No pude cargar aprendizaje.");
         } finally {
             setLoading(false);
         }
@@ -85,11 +90,18 @@ export default function AdminLearningPage() {
     const runLearning = async () => {
         try {
             setRunning(true);
+            setErrorMessage(null);
+            setStatusMessage(null);
             const res = await fetch("/api/admin/learning", { method: "POST" });
-            if (!res.ok) throw new Error("No pude correr el aprendizaje.");
-            await loadData();
+            const data = await res.json();
+            if (!res.ok || data.error) throw new Error(data.error || "No pude correr el aprendizaje.");
+            setRules(Array.isArray(data.rules) ? data.rules : []);
+            setRuns(Array.isArray(data.runs) ? data.runs : []);
+            setInsights(data.insights || null);
+            setStatusMessage(`Aprendizaje ejecutado: ${data.messagesAnalyzed || 0} mensajes, ${data.reportsAnalyzed || 0} reportes y ${data.suggestionsCreated || 0} reglas revisadas.`);
         } catch (error) {
             console.error(error);
+            setErrorMessage(error instanceof Error ? error.message : "No pude correr el aprendizaje.");
         } finally {
             setRunning(false);
         }
@@ -98,16 +110,21 @@ export default function AdminLearningPage() {
     const updateRule = async (id: string, status: string) => {
         try {
             setUpdatingId(id);
+            setErrorMessage(null);
+            setStatusMessage(null);
             const res = await fetch("/api/admin/learning", {
                 method: "PATCH",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ id, status })
             });
-            if (!res.ok) throw new Error("No pude actualizar la regla.");
             const updated = await res.json();
+            if (!res.ok || updated.error) throw new Error(updated.error || "No pude actualizar la regla.");
             setRules((prev) => prev.map((rule) => rule.id === id ? updated : rule));
+            setStatusMessage(status === "approved" ? "Regla aprobada. Ya entra al prompt del chat en la próxima respuesta." : "Regla desactivada. Ya no se usa como regla aprobada.");
+            await loadData();
         } catch (error) {
             console.error(error);
+            setErrorMessage(error instanceof Error ? error.message : "No pude actualizar la regla.");
         } finally {
             setUpdatingId(null);
         }
@@ -136,6 +153,12 @@ export default function AdminLearningPage() {
                             Ejecutar aprendizaje
                         </button>
                     </div>
+
+                    {(statusMessage || errorMessage) && (
+                        <div className={`mt-4 rounded-2xl border px-4 py-3 text-sm font-bold ${errorMessage ? "border-rose-200 bg-rose-50 text-rose-700" : "border-emerald-200 bg-emerald-50 text-emerald-700"}`}>
+                            {errorMessage || statusMessage}
+                        </div>
+                    )}
                 </div>
 
                 <div className="mt-5 grid gap-4 md:grid-cols-3">
@@ -227,21 +250,27 @@ export default function AdminLearningPage() {
                                         </div>
 
                                         <div className="flex w-full gap-2 lg:w-auto lg:flex-col">
-                                            <button
-                                                type="button"
-                                                onClick={() => updateRule(rule.id, "approved")}
-                                                disabled={updatingId === rule.id}
-                                                className="flex-1 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-[11px] font-black uppercase tracking-[0.16em] text-emerald-700 disabled:opacity-60"
-                                            >
-                                                Aprobar
-                                            </button>
+                                            {rule.status === "approved" ? (
+                                                <div className="flex-1 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-center text-[11px] font-black uppercase tracking-[0.16em] text-emerald-700">
+                                                    Activa
+                                                </div>
+                                            ) : (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => updateRule(rule.id, "approved")}
+                                                    disabled={updatingId === rule.id}
+                                                    className="flex-1 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-[11px] font-black uppercase tracking-[0.16em] text-emerald-700 transition hover:bg-emerald-100 disabled:opacity-60"
+                                                >
+                                                    {rule.status === "disabled" ? "Reactivar" : "Aprobar"}
+                                                </button>
+                                            )}
                                             <button
                                                 type="button"
                                                 onClick={() => updateRule(rule.id, "disabled")}
-                                                disabled={updatingId === rule.id}
-                                                className="flex-1 rounded-2xl border border-slate-200 bg-slate-100 px-4 py-3 text-[11px] font-black uppercase tracking-[0.16em] text-slate-600 disabled:opacity-60"
+                                                disabled={updatingId === rule.id || rule.status === "disabled"}
+                                                className="flex-1 rounded-2xl border border-slate-200 bg-slate-100 px-4 py-3 text-[11px] font-black uppercase tracking-[0.16em] text-slate-600 transition hover:bg-slate-200 disabled:opacity-60"
                                             >
-                                                Desactivar
+                                                {rule.status === "disabled" ? "Desactivada" : "Desactivar"}
                                             </button>
                                         </div>
                                     </div>

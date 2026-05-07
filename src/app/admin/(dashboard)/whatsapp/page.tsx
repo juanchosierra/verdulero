@@ -76,6 +76,7 @@ export default function AdminWhatsappPage() {
   const total = subtotal + shipping;
 
   const loadBootstrap = async () => {
+    setProductsLoading(true);
     const [whatsappRes, productsRes] = await Promise.all([
       fetch("/api/admin/whatsapp", { cache: "no-store" }),
       fetch("/api/admin/products?page=1&perPage=40", { cache: "no-store" })
@@ -83,6 +84,13 @@ export default function AdminWhatsappPage() {
 
     const whatsappData = await whatsappRes.json();
     const productsData = await productsRes.json();
+
+    if (!whatsappRes.ok) {
+      throw new Error(whatsappData?.error === "Unauthorized" ? "La sesión de admin expiró. Vuelve a iniciar sesión." : whatsappData?.error || "No se pudo cargar WhatsApp.");
+    }
+    if (!productsRes.ok) {
+      setStatus(productsData?.error || "No se pudo cargar el catálogo de productos.");
+    }
 
     setQuickReplies(Array.isArray(whatsappData.quickReplies) ? whatsappData.quickReplies : []);
     setCities(Array.isArray(whatsappData.cities) ? whatsappData.cities : []);
@@ -105,7 +113,12 @@ export default function AdminWhatsappPage() {
       if (search.trim()) params.set("search", search.trim());
       const res = await fetch(`/api/admin/products?${params.toString()}`, { cache: "no-store" });
       const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || "No se pudo buscar productos.");
       setProducts(Array.isArray(data.items) ? data.items : []);
+      setStatus(search.trim() ? `Búsqueda lista: ${Array.isArray(data.items) ? data.items.length : 0} producto(s).` : "Catálogo actualizado.");
+      setTimeout(() => setStatus(""), 1800);
+    } catch (error: any) {
+      setStatus(error?.message || "No se pudo buscar productos.");
     } finally {
       setProductsLoading(false);
     }
@@ -126,11 +139,22 @@ export default function AdminWhatsappPage() {
   };
 
   const addReply = () => {
-    setQuickReplies((prev) => [...prev, { id: `reply-${Date.now()}`, title: "Nueva respuesta", text: "" }]);
+    setQuickReplies((prev) => [
+      ...prev,
+      {
+        id: `reply-${Date.now()}`,
+        title: "Nueva respuesta",
+        text: "Escribe aquí el mensaje para copiar y pegar en WhatsApp."
+      }
+    ]);
+    setStatus("Respuesta rápida agregada. Edita el texto y pulsa Guardar.");
+    setTimeout(() => setStatus(""), 2200);
   };
 
   const removeReply = (index: number) => {
     setQuickReplies((prev) => prev.filter((_, replyIndex) => replyIndex !== index));
+    setStatus("Respuesta rápida eliminada. Pulsa Guardar para persistir el cambio.");
+    setTimeout(() => setStatus(""), 2200);
   };
 
   const saveReplies = async () => {
@@ -161,14 +185,19 @@ export default function AdminWhatsappPage() {
       }
       return [...prev, { ...product, quantity: 1 }];
     });
+    setStatus(`${product.name} agregado a la canasta manual.`);
+    setTimeout(() => setStatus(""), 1800);
   };
 
   const updateQuantity = (productId: number, delta: number) => {
+    const productName = cart.find((item) => item.id === productId)?.name || "Producto";
     setCart((prev) =>
       prev
         .map((item) => (item.id === productId ? { ...item, quantity: Math.max(0, item.quantity + delta) } : item))
         .filter((item) => item.quantity > 0)
     );
+    setStatus(delta > 0 ? `${productName}: cantidad aumentada.` : `${productName}: cantidad reducida.`);
+    setTimeout(() => setStatus(""), 1400);
   };
 
   const createManualOrder = async () => {
@@ -220,6 +249,8 @@ export default function AdminWhatsappPage() {
       return;
     }
     setShowCheckoutModal(true);
+    setStatus("Completa los datos del cliente para crear el pedido.");
+    setTimeout(() => setStatus(""), 1800);
   };
 
   return (
@@ -250,10 +281,10 @@ export default function AdminWhatsappPage() {
                 <p className="mt-1 text-sm font-bold text-slate-700">Para copiar y pegar en la ventana externa de WhatsApp.</p>
               </div>
               <div className="flex items-center gap-2">
-                <button onClick={addReply} className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-[11px] font-black uppercase tracking-widest text-slate-700">
+                <button type="button" onClick={addReply} className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-[11px] font-black uppercase tracking-widest text-slate-700 hover:bg-slate-50 active:scale-95 transition">
                   <Plus size={14} /> Agregar
                 </button>
-                <button onClick={saveReplies} disabled={savingReplies} className="inline-flex items-center gap-2 rounded-xl bg-emerald-600 px-4 py-2 text-[11px] font-black uppercase tracking-widest text-white disabled:opacity-60">
+                <button type="button" onClick={saveReplies} disabled={savingReplies} className="inline-flex items-center gap-2 rounded-xl bg-emerald-600 px-4 py-2 text-[11px] font-black uppercase tracking-widest text-white disabled:opacity-60 hover:bg-emerald-700 active:scale-95 transition">
                   {savingReplies ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />} Guardar
                 </button>
               </div>
@@ -275,14 +306,16 @@ export default function AdminWhatsappPage() {
                   />
                   <div className="flex items-center justify-between gap-3">
                     <button
+                      type="button"
                       onClick={() => copyText(reply.text)}
-                      className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-[11px] font-black uppercase tracking-widest text-slate-700"
+                      className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-[11px] font-black uppercase tracking-widest text-slate-700 hover:bg-slate-50 active:scale-95 transition"
                     >
                       <Clipboard size={14} /> Copiar
                     </button>
                     <button
+                      type="button"
                       onClick={() => removeReply(index)}
-                      className="inline-flex items-center gap-2 rounded-xl border border-rose-200 bg-rose-50 px-4 py-2 text-[11px] font-black uppercase tracking-widest text-rose-700"
+                      className="inline-flex items-center gap-2 rounded-xl border border-rose-200 bg-rose-50 px-4 py-2 text-[11px] font-black uppercase tracking-widest text-rose-700 hover:bg-rose-100 active:scale-95 transition"
                     >
                       <Trash2 size={14} /> Quitar
                     </button>
@@ -299,7 +332,8 @@ export default function AdminWhatsappPage() {
                   <p className="text-[11px] font-black uppercase tracking-[0.22em] text-slate-400">Catálogo + canasta manual</p>
                   <p className="mt-1 text-sm font-bold text-slate-700">Cada producto te deja copiar texto o sumarlo a la canasta para crear el pedido a mano.</p>
                 </div>
-                <div className="relative">
+                <div className="flex items-center gap-2">
+                  <div className="relative">
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={14} />
                   <input
                     value={search}
@@ -310,6 +344,16 @@ export default function AdminWhatsappPage() {
                     placeholder="Buscar producto..."
                     className="w-60 rounded-xl border border-slate-200 bg-slate-50 py-3 pl-9 pr-4 text-sm font-bold text-slate-800 outline-none"
                   />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={searchProducts}
+                    disabled={productsLoading}
+                    className="inline-flex items-center gap-2 rounded-xl bg-slate-900 px-4 py-3 text-[11px] font-black uppercase tracking-widest text-white disabled:opacity-60 hover:bg-slate-800 active:scale-95 transition"
+                  >
+                    {productsLoading ? <Loader2 size={14} className="animate-spin" /> : <Search size={14} />}
+                    Buscar
+                  </button>
                 </div>
               </div>
             </div>
@@ -339,14 +383,16 @@ export default function AdminWhatsappPage() {
                       </div>
                       <div className="mt-4 flex items-center gap-2">
                         <button
+                          type="button"
                           onClick={() => copyText(productCopyText(product))}
-                          className="inline-flex flex-1 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-3 text-[11px] font-black uppercase tracking-widest text-slate-700"
+                          className="inline-flex flex-1 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-3 text-[11px] font-black uppercase tracking-widest text-slate-700 hover:bg-slate-50 active:scale-95 transition"
                         >
                           <Clipboard size={14} /> Copiar
                         </button>
                         <button
+                          type="button"
                           onClick={() => addToCart(product)}
-                          className="inline-flex flex-1 items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-3 text-[11px] font-black uppercase tracking-widest text-white"
+                          className="inline-flex flex-1 items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-3 text-[11px] font-black uppercase tracking-widest text-white hover:bg-emerald-700 active:scale-95 transition"
                         >
                           <Plus size={14} /> Agregar
                         </button>
@@ -376,9 +422,9 @@ export default function AdminWhatsappPage() {
                               <div className="mt-1 text-xs font-semibold text-slate-500">{formatCop(item.regular_price)} · {item.unit}</div>
                             </div>
                             <div className="flex items-center gap-2">
-                              <button onClick={() => updateQuantity(item.id, -1)} className="h-9 w-9 rounded-xl border border-slate-200 bg-white text-lg font-black text-slate-700">-</button>
+                              <button type="button" onClick={() => updateQuantity(item.id, -1)} className="h-9 w-9 rounded-xl border border-slate-200 bg-white text-lg font-black text-slate-700 hover:bg-slate-50 active:scale-95 transition">-</button>
                               <div className="min-w-10 text-center text-sm font-black text-slate-900">{item.quantity}</div>
-                              <button onClick={() => updateQuantity(item.id, 1)} className="h-9 w-9 rounded-xl border border-slate-200 bg-white text-lg font-black text-slate-700">+</button>
+                              <button type="button" onClick={() => updateQuantity(item.id, 1)} className="h-9 w-9 rounded-xl border border-slate-200 bg-white text-lg font-black text-slate-700 hover:bg-slate-50 active:scale-95 transition">+</button>
                             </div>
                           </div>
                         </div>
@@ -393,9 +439,10 @@ export default function AdminWhatsappPage() {
                   </div>
 
                   <button
+                    type="button"
                     onClick={openCheckoutModal}
                     disabled={submittingOrder || cart.length === 0}
-                    className="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-slate-900 px-5 py-4 text-sm font-black uppercase tracking-widest text-white disabled:opacity-60"
+                    className="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-slate-900 px-5 py-4 text-sm font-black uppercase tracking-widest text-white disabled:opacity-60 hover:bg-slate-800 active:scale-95 transition"
                   >
                     {submittingOrder ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
                     {submittingOrder ? "Creando..." : "Finalizar pedido"}
@@ -416,8 +463,9 @@ export default function AdminWhatsappPage() {
                 <h3 className="mt-1 text-lg font-black text-slate-900">Datos del cliente</h3>
               </div>
               <button
+                type="button"
                 onClick={() => setShowCheckoutModal(false)}
-                className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-[11px] font-black uppercase tracking-widest text-slate-700"
+                className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-[11px] font-black uppercase tracking-widest text-slate-700 hover:bg-slate-50 active:scale-95 transition"
               >
                 Cerrar
               </button>
@@ -444,9 +492,10 @@ export default function AdminWhatsappPage() {
               </div>
 
               <button
+                type="button"
                 onClick={createManualOrder}
                 disabled={submittingOrder}
-                className="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-slate-900 px-5 py-4 text-sm font-black uppercase tracking-widest text-white disabled:opacity-60"
+                className="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-slate-900 px-5 py-4 text-sm font-black uppercase tracking-widest text-white disabled:opacity-60 hover:bg-slate-800 active:scale-95 transition"
               >
                 {submittingOrder ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
                 {submittingOrder ? "Creando..." : "Crear pedido manual"}

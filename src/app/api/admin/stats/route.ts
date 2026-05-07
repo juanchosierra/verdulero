@@ -21,6 +21,48 @@ function dayLabel(date: Date) {
     }).format(date).replace(".", "");
 }
 
+function parseOrderItems(raw: unknown) {
+    try {
+        const parsed = typeof raw === "string" ? JSON.parse(raw) : raw;
+        return Array.isArray(parsed) ? parsed : [];
+    } catch {
+        return [];
+    }
+}
+
+function computedMerchandiseTotal(order: { items: unknown }) {
+    return parseOrderItems(order.items).reduce((sum: number, item: any) => {
+        const quantity = Number(item?.quantity || 0);
+        const price = Number(item?.price || 0);
+        if (!Number.isFinite(quantity) || !Number.isFinite(price)) return sum;
+        return sum + quantity * price;
+    }, 0);
+}
+
+function isOperationalOrder(order: { total: number; subtotal: number; shipping: number; items: unknown }) {
+    const items = parseOrderItems(order.items);
+    if (items.length === 0) return false;
+
+    const hasInvalidItem = items.some((item: any) => {
+        const quantity = Number(item?.quantity || 0);
+        const price = Number(item?.price || 0);
+        if (!Number.isFinite(quantity) || !Number.isFinite(price)) return true;
+        if (quantity <= 0 || price < 0) return true;
+        if (quantity > 500) return true;
+        if (quantity * price > 5_000_000) return true;
+        return false;
+    });
+    if (hasInvalidItem) return false;
+
+    const computedTotal = computedMerchandiseTotal(order) + Number(order.shipping || 0);
+    const storedTotal = Number(order.total || 0);
+    if (!Number.isFinite(storedTotal) || storedTotal <= 0) return false;
+    if (storedTotal > 5_000_000) return false;
+
+    const delta = Math.abs(storedTotal - computedTotal);
+    return delta <= 5_000 || delta / Math.max(computedTotal, 1) <= 0.05;
+}
+
 export async function GET(req: Request) {
     const authError = await requireAdmin(req);
     if (authError) return authError;
@@ -34,21 +76,24 @@ export async function GET(req: Request) {
             buildDailySalesReport()
         ]);
 
-        const totalSales = orders.reduce((sum, o) => sum + o.total, 0);
-        const pendingOrders = orders.filter((o) => o.status === "Pendiente").length;
-        const completedOrders = orders.filter((o) => o.status === "Completado").length;
+        const validOrders = orders.filter(isOperationalOrder);
+        const excludedOrders = orders.length - validOrders.length;
+
+        const totalSales = validOrders.reduce((sum, o) => sum + o.total, 0);
+        const pendingOrders = validOrders.filter((o) => o.status === "Pendiente").length;
+        const completedOrders = validOrders.filter((o) => o.status === "Completado").length;
         const activeChats = chats.filter((c) => c.isActive).length;
 
         const startToday = startOfBogotaDay();
         const endToday = new Date(startToday);
         endToday.setUTCDate(endToday.getUTCDate() + 1);
 
-        const salesToday = orders
+        const salesToday = validOrders
             .filter((o) => new Date(o.createdAt) >= startToday && new Date(o.createdAt) < endToday)
             .reduce((sum, o) => sum + o.total, 0);
 
         const chatCount = chats.length;
-        const orderCount = orders.length;
+        const orderCount = validOrders.length;
         const conversion = chatCount > 0 ? Number(((orderCount / chatCount) * 100).toFixed(1)) : 0;
 
         const weekStart = new Date(startToday);
@@ -59,7 +104,7 @@ export async function GET(req: Request) {
             dayStart.setUTCDate(weekStart.getUTCDate() + i);
             const dayEnd = new Date(dayStart);
             dayEnd.setUTCDate(dayEnd.getUTCDate() + 1);
-            const dayOrders = orders.filter((o) => new Date(o.createdAt) >= dayStart && new Date(o.createdAt) < dayEnd);
+            const dayOrders = validOrders.filter((o) => new Date(o.createdAt) >= dayStart && new Date(o.createdAt) < dayEnd);
             const daySales = dayOrders.reduce((sum, o) => sum + o.total, 0);
             chartData.push({
                 day: dayLabel(dayStart),
@@ -76,7 +121,8 @@ export async function GET(req: Request) {
                 chats: activeChats,
                 orders: orderCount,
                 completed: completedOrders,
-                conversion
+                conversion,
+                excludedOrders
             },
             operations: {
                 aiPaused: config?.intervencionManual ?? false,
@@ -120,6 +166,7 @@ export async function POST(req: Request) {
             prisma.order.deleteMany({}),
             prisma.customer.deleteMany({}),
             prisma.errorReport.deleteMany({}),
+            prisma.learningEvent.deleteMany({}),
             prisma.salesReportDispatch.deleteMany({})
         ]);
         await prisma.$executeRawUnsafe('DELETE FROM "LearnedRule"');
